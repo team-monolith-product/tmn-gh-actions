@@ -1,0 +1,87 @@
+name: Build to NCP
+
+on:
+  workflow_call:
+    inputs:
+      env:
+        required: true
+        type: string
+      target:
+        required: true
+        type: string
+      registry:
+        required: true
+        type: string
+      imageName:
+        required: true
+        type: string
+      valueFilePath:
+        required: true
+        type: string
+      buildArgs:
+        required: false
+        type: string
+    secrets:
+      NCP_ACCESS_KEY_ID:
+        required: true
+      NCP_SECRET_KEY:
+        required: true
+      MACHINE_TOKEN:
+        required: true
+
+jobs:
+
+  build:
+
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v3
+
+    # buildx 는 빠른 도커 백엔드입니다. 빌드 속도 개선을 위해 추가했습니다.
+    - name: Set up Docker Buildx
+      id: buildx
+      uses: docker/setup-buildx-action@v2
+
+    - name: Login to Docker Hub
+      uses: docker/login-action@v3
+      with:
+        registry: ${{ inputs.registry }}
+        username: ${{ secrets.NCP_ACCESS_KEY_ID }}
+        password: ${{ secrets.NCP_SECRET_KEY }}
+        logout: false
+
+    - name: Get current date time
+      id: date
+      run: echo "date=$(TZ='Asia/Seoul' date +'%Y-%m-%dT%H-%M-%S')" >> $GITHUB_OUTPUT
+
+    - name: Build and push
+      uses: docker/build-push-action@v3
+      with:
+        push: true
+        tags: ${{ inputs.registry }}/${{ inputs.imageName }}:${{ steps.date.outputs.date }}
+        build-args: ${{ inputs.buildArgs }}
+        target: ${{ inputs.env }}
+        cache-from: type=gha # 여기서 gha 는 Guthub Actions 용 캐시를 의미합니다.
+        cache-to: type=gha,mode=max
+
+    - name: Checkout jce-service-helm Repository
+      uses: actions/checkout@v3
+      with:
+        repository: team-monolith-product/jce-service-helm
+        path: jce-service-helm
+        token: ${{ secrets.MACHINE_TOKEN }}
+        ref: ${{ inputs.target }}
+
+    - name: Update Image Version in the related HelmChart value file
+      uses: fjogeleit/yaml-update-action@master
+      with:
+        valueFile: '{{ inputs.valueFilePath }}'
+        propertyPath: 'image.tag'
+        value: ${{ steps.date.outputs.date }}
+        repository: team-monolith-product/jce-service-helm
+        branch: ${{ inputs.target }}
+        message: 'auto: Update Image Version to ${{ steps.date.outputs.date }}'
+        token: ${{ secrets.MACHINE_TOKEN }}
+        workDir: jce-service-helm
