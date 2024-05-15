@@ -15,6 +15,10 @@ on:
       valueFilePath:
         required: true
         type: string
+      propertyPath:
+        required: false
+        type: string
+        default: 'image.tag'
       buildArgs:
         required: false
         type: string
@@ -78,7 +82,7 @@ jobs:
       uses: fjogeleit/yaml-update-action@master
       with:
         valueFile: '${{ inputs.valueFilePath }}'
-        propertyPath: 'image.tag'
+        propertyPath: '${{ inputs.propertyPath }}'
         value: ${{ steps.date.outputs.date }}
         repository: team-monolith-product/jce-service-helm
         branch: ${{ inputs.target }}

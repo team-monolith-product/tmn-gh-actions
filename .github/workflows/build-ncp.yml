@@ -18,6 +18,10 @@ on:
       valueFilePath:
         required: true
         type: string
+      propertyPath:
+        required: false
+        type: string
+        default: 'image.tag'
       buildArgs:
         required: false
         type: string
@@ -77,8 +81,8 @@ jobs:
     - name: Update Image Version in the related HelmChart value file
       uses: fjogeleit/yaml-update-action@master
       with:
-        valueFile: '{{ inputs.valueFilePath }}'
-        propertyPath: 'image.tag'
+        valueFile: '${{ inputs.valueFilePath }}'
+        propertyPath: '${{ inputs.propertyPath }}'
         value: ${{ steps.date.outputs.date }}
         repository: team-monolith-product/jce-service-helm
         branch: ${{ inputs.target }}
