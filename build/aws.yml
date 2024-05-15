@@ -15,6 +15,9 @@ on:
       valueFilePath:
         required: true
         type: string
+      buildArgs:
+        required: false
+        type: string
     secrets:
       AWS_ACCESS_KEY_ID:
         required: true
@@ -58,7 +61,7 @@ jobs:
       with:
         push: true
         tags: ${{ steps.login-ecr.outputs.registry }}/${{ inputs.imageName }}:${{ steps.date.outputs.date }}
-        build-args: MACHINE_PASSWORD=${{ secrets.PYPI_MACHINE_PASSWORD }}
+        build-args: ${{ inputs.buildArgs }}
         target: ${{ inputs.env }}
         cache-from: type=gha # 여기서 gha 는 Guthub Actions 용 캐시를 의미합니다.
         cache-to: type=gha,mode=max
