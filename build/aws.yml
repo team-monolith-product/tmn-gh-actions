@@ -1,4 +1,4 @@
-name: Build Rails to AWS
+name: Build to AWS
 
 on:
   workflow_call:
