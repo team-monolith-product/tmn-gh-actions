@@ -77,7 +77,6 @@ jobs:
     # login to NCP Container Registry
     - name: Login to Docker Hub
       uses: docker/login-action@v3
-      continue-on-error: true
       with:
         registry: ${{ inputs.ncpRegistry }}
         username: ${{ secrets.NCP_ACCESS_KEY_ID }}
@@ -90,7 +89,6 @@ jobs:
 
     - name: Build and push
       uses: docker/build-push-action@v5
-      continue-on-error: true
       with:
         push: true
         tags: |
