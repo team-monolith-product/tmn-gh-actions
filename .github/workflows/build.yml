@@ -19,38 +19,36 @@ on:
         type: string
       # AWS
       awsImageName:
-        required: true
+        required: false
         type: string
       awsValueFilePath:
-        required: true
+        required: false
         type: string
       # NCP
       ncpRegistry:
-        required: true
+        required: false
         type: string
       ncpImageName:
-        required: true
+        required: false
         type: string
       ncpValueFilePath:
-        required: true
+        required: false
         type: string
 
     secrets:
       AWS_ACCESS_KEY_ID:
-        required: true
+        required: false
       AWS_SECRET_ACCESS_KEY:
-        required: true
+        required: false
       NCP_ACCESS_KEY_ID:
-        required: true
+        required: false
       NCP_SECRET_KEY:
-        required: true
+        required: false
       MACHINE_TOKEN:
         required: true
 
 jobs:
-
   build:
-  
     runs-on: ubuntu-latest
 
     steps:
@@ -62,8 +60,9 @@ jobs:
       id: buildx
       uses: docker/setup-buildx-action@v3
 
-    # login to AWS ECR
+    # AWS 관련 작업
     - name: Configure AWS credentials
+      if: ${{ inputs.awsImageName && inputs.awsValueFilePath }}
       uses: aws-actions/configure-aws-credentials@v4
       with:
         aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
@@ -71,11 +70,13 @@ jobs:
         aws-region: ap-northeast-2
       
     - name: Login to Amazon ECR
+      if: ${{ inputs.awsImageName && inputs.awsValueFilePath }}
       id: login-ecr
       uses: aws-actions/amazon-ecr-login@v2
 
-    # login to NCP Container Registry
-    - name: Login to Docker Hub
+    # NCP 관련 작업
+    - name: Login to NCP Container Registry
+      if: ${{ inputs.ncpRegistry && inputs.ncpImageName && inputs.ncpValueFilePath }}
       uses: docker/login-action@v3
       with:
         registry: ${{ inputs.ncpRegistry }}
@@ -87,16 +88,30 @@ jobs:
       id: date
       run: echo "date=$(TZ='Asia/Seoul' date +'%Y-%m-%dT%H-%M-%S')" >> $GITHUB_OUTPUT
 
+    - name: Set tags for AWS and NCP
+      id: tags
+      run: |
+        TAGS=""
+        if [ "${{ inputs.awsImageName }}" ] && [ "${{ inputs.awsValueFilePath }}" ]; then
+          TAGS="${{ steps.login-ecr.outputs.registry }}/${{ inputs.awsImageName }}:${{ steps.date.outputs.date }}"
+        fi
+        if [ "${{ inputs.ncpRegistry }}" ] && [ "${{ inputs.ncpImageName }}" ] && [ "${{ inputs.ncpValueFilePath }}" ]; then
+          if [ -n "$TAGS" ]; then
+            TAGS="$TAGS,${{ inputs.ncpRegistry }}/${{ inputs.ncpImageName }}:${{ steps.date.outputs.date }}"
+          else
+            TAGS="${{ inputs.ncpRegistry }}/${{ inputs.ncpImageName }}:${{ steps.date.outputs.date }}"
+          fi
+        fi
+        echo "tags=$TAGS" >> $GITHUB_OUTPUT
+
     - name: Build and push
       uses: docker/build-push-action@v5
       with:
         push: true
-        tags: |
-          ${{ steps.login-ecr.outputs.registry }}/${{ inputs.awsImageName }}:${{ steps.date.outputs.date }}
-          ${{ inputs.ncpRegistry }}/${{ inputs.ncpImageName }}:${{ steps.date.outputs.date }}
+        tags: ${{ steps.tags.outputs.tags }}
         build-args: ${{ inputs.buildArgs }}
         target: ${{ inputs.env }}
-        cache-from: type=gha # 여기서 gha 는 Guthub Actions 용 캐시를 의미합니다.
+        cache-from: type=gha
         cache-to: type=gha,mode=max
 
     - name: Checkout jce-service-helm Repository
@@ -107,6 +122,22 @@ jobs:
         token: ${{ secrets.MACHINE_TOKEN }}
         ref: ${{ inputs.target }}
 
+    - name: Set changes for AWS and NCP
+      id: changes
+      run: |
+        CHANGES=""
+        if [ "${{ inputs.awsValueFilePath }}" ]; then
+          CHANGES="{\"${{ inputs.awsValueFilePath }}\":{\"${{ inputs.propertyPath }}\":\"${{ steps.date.outputs.date }}\"}}"
+        fi
+        if [ "${{ inputs.ncpValueFilePath }}" ]; then
+          if [ -n "$CHANGES" ]; then
+            CHANGES=$(echo $CHANGES | jq ". + {\"${{ inputs.ncpValueFilePath }}\":{\"${{ inputs.propertyPath }}\":\"${{ steps.date.outputs.date }}\"}}")
+          else
+            CHANGES="{\"${{ inputs.ncpValueFilePath }}\":{\"${{ inputs.propertyPath }}\":\"${{ steps.date.outputs.date }}\"}}"
+          fi
+        fi
+        echo "changes=$CHANGES" >> $GITHUB_OUTPUT
+
     - name: Update Image Version in the related HelmChart value file
       uses: fjogeleit/yaml-update-action@master
       with:
@@ -115,12 +146,4 @@ jobs:
         message: 'auto: Update Image Version to ${{ steps.date.outputs.date }}'
         token: ${{ secrets.MACHINE_TOKEN }}
         workDir: jce-service-helm
-        changes: |
-          {
-            "${{ inputs.awsValueFilePath }}": {
-              "${{ inputs.propertyPath }}": "${{ steps.date.outputs.date }}"
-            },
-            "${{ inputs.ncpValueFilePath }}": {
-              "${{ inputs.propertyPath }}": "${{ steps.date.outputs.date }}"
-            }
-          }
+        changes: ${{ steps.changes.outputs.changes }}
