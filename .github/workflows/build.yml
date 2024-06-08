@@ -127,10 +127,10 @@ jobs:
       run: |
         CHANGES="{}"
         if [ "${{ inputs.awsValueFilePath }}" ]; then
-          CHANGES=$(echo $CHANGES | jq ".\"${{ inputs.awsValueFilePath }}\".\"${{ inputs.propertyPath }}\" = \"${{ steps.date.outputs.date }}\"")
+          CHANGES=$(echo $CHANGES | jq -c ".\"${{ inputs.awsValueFilePath }}\".\"${{ inputs.propertyPath }}\" = \"${{ steps.date.outputs.date }}\"")
         fi
         if [ "${{ inputs.ncpValueFilePath }}" ]; then
-          CHANGES=$(echo $CHANGES | jq ".\"${{ inputs.ncpValueFilePath }}\".\"${{ inputs.propertyPath }}\" = \"${{ steps.date.outputs.date }}\"")
+          CHANGES=$(echo $CHANGES | jq -c ".\"${{ inputs.ncpValueFilePath }}\".\"${{ inputs.propertyPath }}\" = \"${{ steps.date.outputs.date }}\"")
         fi
         echo "changes=$CHANGES" >> $GITHUB_OUTPUT
 
