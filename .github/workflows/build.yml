@@ -125,16 +125,12 @@ jobs:
     - name: Set changes for AWS and NCP
       id: changes
       run: |
-        CHANGES=""
+        CHANGES="{}"
         if [ "${{ inputs.awsValueFilePath }}" ]; then
-          CHANGES="{\"${{ inputs.awsValueFilePath }}\":{\"${{ inputs.propertyPath }}\":\"${{ steps.date.outputs.date }}\"}}"
+          CHANGES=$(echo $CHANGES | jq ".\"${{ inputs.awsValueFilePath }}\".\"${{ inputs.propertyPath }}\" = \"${{ steps.date.outputs.date }}\"")
         fi
         if [ "${{ inputs.ncpValueFilePath }}" ]; then
-          if [ -n "$CHANGES" ]; then
-            CHANGES=$(echo $CHANGES | jq ". + {\"${{ inputs.ncpValueFilePath }}\":{\"${{ inputs.propertyPath }}\":\"${{ steps.date.outputs.date }}\"}}")
-          else
-            CHANGES="{\"${{ inputs.ncpValueFilePath }}\":{\"${{ inputs.propertyPath }}\":\"${{ steps.date.outputs.date }}\"}}"
-          fi
+          CHANGES=$(echo $CHANGES | jq ".\"${{ inputs.ncpValueFilePath }}\".\"${{ inputs.propertyPath }}\" = \"${{ steps.date.outputs.date }}\"")
         fi
         echo "changes=$CHANGES" >> $GITHUB_OUTPUT
 
