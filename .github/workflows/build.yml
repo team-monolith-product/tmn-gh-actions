@@ -3,6 +3,11 @@ name: Build
 on:
   workflow_call:
     inputs:
+      # gha
+      runner:
+        required: false
+        type: string
+        default: ubuntu-latest
       # Common
       env:
         required: true
@@ -49,7 +54,7 @@ on:
 
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: ${{ inputs.runner }}
 
     steps:
     - name: Checkout
