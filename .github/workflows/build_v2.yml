@@ -62,8 +62,12 @@ jobs:
         read -r -d '' updateTargets << EOM
         ${{ inputs.updateTargets }}
         EOM
-        echo "contains_aws=$(echo "$updateTargets" | jq -r 'has("aws")')" >> $GITHUB_OUTPUT
-        echo "contains_ncp=$(echo "$updateTargets" | jq -r 'has("ncp")')" >> $GITHUB_OUTPUT
+        CONTAINS_AWS=$(echo "$updateTargets" | jq -r 'has("aws")')
+        CONTAINS_NCP=$(echo "$updateTargets" | jq -r 'has("ncp")')
+        echo $CONTAINS_AWS
+        
+        echo "contains_aws=$CONTAINS_AWS" >> $GITHUB_OUTPUT
+        echo "contains_ncp=$CONTAINS_NCP" >> $GITHUB_OUTPUT
 
     # AWS 관련 작업
     - name: Configure AWS credentials
@@ -87,7 +91,9 @@ jobs:
         read -r -d '' updateTargets << EOM
         ${{ inputs.updateTargets }}
         EOM
-        echo "ncp_registry=$(echo "$updateTargets" | jq -r '.ncp.registry')" >> $GITHUB_OUTPUT
+        NCP_REGISTRY=$(echo "$updateTargets" | jq -r '.ncp.registry')
+
+        echo "ncp_registry=$NCP_REGISTRY" >> $GITHUB_OUTPUT
 
     - name: Login to NCP Container Registry
       if: ${{ steps.check-platform.outputs.contains_ncp == 'true' }}
