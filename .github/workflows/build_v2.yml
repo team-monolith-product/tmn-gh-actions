@@ -81,11 +81,19 @@ jobs:
       uses: aws-actions/amazon-ecr-login@v2
 
     # NCP 관련 작업
+    - name: Extract NCP registry
+      id: extract-ncp-registry
+      if: ${{ steps.check-platform.outputs.contains_ncp == 'true' }}
+      run: |
+        updateTargets=${{ inputs.updateTargets }}
+        NCP_REGISTRY=$(echo $updateTargets | jq -r '.ncp.registry')
+        echo "ncp_registry=$NCP_REGISTRY" >> $GITHUB_OUTPUT
+
     - name: Login to NCP Container Registry
       if: ${{ steps.check-platform.outputs.contains_ncp == 'true' }}
       uses: docker/login-action@v3
       with:
-        registry: ${{ inputs.updateTargets | jq -r '.ncp.registry' }}
+        registry: ${{ steps.extract-ncp-registry.outputs.ncp_registry }}
         username: ${{ secrets.NCP_ACCESS_KEY_ID }}
         password: ${{ secrets.NCP_SECRET_KEY }}
         logout: false
