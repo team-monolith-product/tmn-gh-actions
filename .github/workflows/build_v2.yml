@@ -62,14 +62,14 @@ jobs:
         read -r -d '' updateTargets << EOM
         ${{ inputs.updateTargets }}
         EOM
-        echo 'updateTargets=$updateTargets' >> $GITHUB_OUTPUT
+        echo "updateTargets=$updateTargets" >> $GITHUB_OUTPUT
 
     - name: Check for platform presence
       id: check-platform
       run: |
         updateTargets='${{ steps.store-updatetargets.outputs.updateTargets }}'
-        CONTAINS_AWS=$(echo '$updateTargets' | jq -r 'has("aws")')
-        CONTAINS_NCP=$(echo '$updateTargets' | jq -r 'has("ncp")')
+        CONTAINS_AWS=$(echo "$updateTargets" | jq -r 'has("aws")')
+        CONTAINS_NCP=$(echo "$updateTargets" | jq -r 'has("ncp")')
 
         echo "contains_aws=$CONTAINS_AWS" >> $GITHUB_OUTPUT
         echo "contains_ncp=$CONTAINS_NCP" >> $GITHUB_OUTPUT
@@ -94,7 +94,7 @@ jobs:
       if: ${{ steps.check-platform.outputs.contains_ncp == 'true' }}
       run: |
         updateTargets='${{ steps.store-updatetargets.outputs.updateTargets }}'
-        NCP_REGISTRY=$(echo '$updateTargets' | jq -r '.ncp.registry')
+        NCP_REGISTRY=$(echo "$updateTargets" | jq -r '.ncp.registry')
         echo "ncp_registry=$NCP_REGISTRY" >> $GITHUB_OUTPUT
 
     - name: Login to NCP Container Registry
@@ -111,11 +111,11 @@ jobs:
       run: |
         updateTargets='${{ steps.store-updatetargets.outputs.updateTargets }}'
         TAGS=""
-        for type in $(echo '$updateTargets' | jq -r 'keys[]'); do
-          TARGET=$(echo '$updateTargets' | jq -r ".$type")
+        for type in $(echo "$updateTargets" | jq -r 'keys[]'); do
+          TARGET=$(echo "$updateTargets" | jq -r ".$type")
           if [ "$type" == "aws" ]; then
-            AWS_IMAGE_NAME=$(echo '$TARGET' | jq -r '.imageName')
-            for VALUE_FILE_PATH in $(echo '$TARGET' | jq -r '.valueFilePath[]'); do
+            AWS_IMAGE_NAME=$(echo "$TARGET" | jq -r '.imageName')
+            for VALUE_FILE_PATH in $(echo "$TARGET" | jq -r '.valueFilePath[]'); do
               TAG="${{ secrets.AWS_REGISTRY }}/${AWS_IMAGE_NAME}:${{ steps.date.outputs.date }}"
               if [ -n "$TAGS" ]; then
                 TAGS="$TAGS,$TAG"
@@ -124,9 +124,9 @@ jobs:
               fi
             done
           elif [ "$type" == "ncp" ]; then
-            NCP_REGISTRY=$(echo '$TARGET' | jq -r '.registry')
-            NCP_IMAGE_NAME=$(echo '$TARGET' | jq -r '.imageName')
-            for VALUE_FILE_PATH in $(echo '$TARGET' | jq -r '.valueFilePath[]'); do
+            NCP_REGISTRY=$(echo "$TARGET" | jq -r '.registry')
+            NCP_IMAGE_NAME=$(echo "$TARGET" | jq -r '.imageName')
+            for VALUE_FILE_PATH in $(echo "$TARGET" | jq -r '.valueFilePath[]'); do
               TAG="${NCP_REGISTRY}/${NCP_IMAGE_NAME}:${{ steps.date.outputs.date }}"
               if [ -n "$TAGS" ]; then
                 TAGS="$TAGS,$TAG"
@@ -161,15 +161,15 @@ jobs:
       run: |
         updateTargetsRaw='${{ steps.store-updatetargets.outputs.updateTargets }}'
         CHANGES="{}"
-        for type in $(echo '$updateTargetsRaw' | jq -r 'keys[]'); do
-          TARGET=$(echo '$updateTargetsRaw' | jq -r ".$type")
-          for VALUE_FILE_PATH in $(echo '$TARGET' | jq -r '.valueFilePath[]'); do
+        for type in $(echo "$updateTargetsRaw" | jq -r 'keys[]'); do
+          TARGET=$(echo "$updateTargetsRaw" | jq -r ".$type")
+          for VALUE_FILE_PATH in $(echo "$TARGET" | jq -r '.valueFilePath[]'); do
             if [ "$VALUE_FILE_PATH" != "null" ]; then
               CHANGES=$(echo $CHANGES | jq -c ".\"$VALUE_FILE_PATH\".\"${{ inputs.propertyPath }}\" = \"${{ steps.date.outputs.date }}\"")
             fi
           done
         done
-        echo 'changes=$CHANGES' >> $GITHUB_OUTPUT
+        echo "changes=$CHANGES" >> $GITHUB_OUTPUT
 
     - name: Update Image Version in the related HelmChart value file
       uses: fjogeleit/yaml-update-action@master
