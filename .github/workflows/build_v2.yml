@@ -109,7 +109,7 @@ jobs:
           if [ "$type" == "aws" ]; then
             AWS_IMAGE_NAME=$(echo "$TARGET" | jq -r '.imageName')
             for VALUE_FILE_PATH in $(echo "$TARGET" | jq -r '.valueFilePath[]'); do
-              TAG="${{ secrets.AWS_REGISTRY }}/${AWS_IMAGE_NAME}:${{ steps.date.outputs.date }}"
+              TAG="${{ steps.login-ecr.outputs.registry }}/${AWS_IMAGE_NAME}:${{ steps.date.outputs.date }}"
               if [ -n "$TAGS" ]; then
                 TAGS="$TAGS,$TAG"
               else
