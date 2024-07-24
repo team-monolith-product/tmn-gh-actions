@@ -59,12 +59,16 @@ jobs:
     - name: Check for platform presence
       id: check-platform
       run: |
+        echo "111111"
         read -r -d '' updateTargets << EOM
         ${{ inputs.updateTargets }}
         EOM
+        echo "222222"
+        echo "$updateTargets"
         CONTAINS_AWS=$(echo "$updateTargets" | jq -r 'has("aws")')
         CONTAINS_NCP=$(echo "$updateTargets" | jq -r 'has("ncp")')
-        echo $CONTAINS_AWS
+        echo "333333"
+        echo "$CONTAINS_AWS"
         
         echo "contains_aws=$CONTAINS_AWS" >> $GITHUB_OUTPUT
         echo "contains_ncp=$CONTAINS_NCP" >> $GITHUB_OUTPUT
