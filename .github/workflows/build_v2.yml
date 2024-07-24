@@ -1,0 +1,125 @@
+name: Build
+
+on:
+  workflow_call:
+    inputs:
+      # gha
+      runner:
+        required: false
+        type: string
+        default: ubuntu-latest
+      # Common
+      env:
+        required: true
+        type: string
+      target:
+        required: true
+        type: string
+      propertyPath:
+        required: false
+        type: string
+        default: 'image.tag'
+      buildArgs:
+        required: false
+        type: string
+      # Update targets
+      updateTargets:
+        required: true
+        type: array
+
+    secrets:
+      AWS_ACCESS_KEY_ID:
+        required: false
+      AWS_SECRET_ACCESS_KEY:
+        required: false
+      NCP_ACCESS_KEY_ID:
+        required: false
+      NCP_SECRET_KEY:
+        required: false
+      MACHINE_TOKEN:
+        required: true
+
+jobs:
+  build:
+    runs-on: ${{ inputs.runner }}
+
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+
+    - name: Set up Docker Buildx
+      id: buildx
+      uses: docker/setup-buildx-action@v3
+
+    - name: Get current date time
+      id: date
+      run: echo "date=$(TZ='Asia/Seoul' date +'%Y-%m-%dT%H-%M-%S')" >> $GITHUB_OUTPUT
+
+    - name: Set tags
+      id: tags
+      run: |
+        TAGS=""
+        for target in "${{ inputs.updateTargets }}"; do
+          TARGET_TYPE=$(echo $target | jq -r '.type')
+          if [ "$TARGET_TYPE" == "aws" ]; then
+            AWS_IMAGE_NAME=$(echo $target | jq -r '.imageName')
+            AWS_VALUE_FILE_PATH=$(echo $target | jq -r '.valueFilePath')
+            TAG="${{ secrets.AWS_REGISTRY }}/${AWS_IMAGE_NAME}:${{ steps.date.outputs.date }}"
+            if [ -n "$TAGS" ]; then
+              TAGS="$TAGS,$TAG"
+            else
+              TAGS="$TAG"
+            fi
+          elif [ "$TARGET_TYPE" == "ncp" ]; then
+            NCP_REGISTRY=$(echo $target | jq -r '.registry')
+            NCP_IMAGE_NAME=$(echo $target | jq -r '.imageName')
+            NCP_VALUE_FILE_PATH=$(echo $target | jq -r '.valueFilePath')
+            TAG="${NCP_REGISTRY}/${NCP_IMAGE_NAME}:${{ steps.date.outputs.date }}"
+            if [ -n "$TAGS" ]; then
+              TAGS="$TAGS,$TAG"
+            else
+              TAGS="$TAG"
+            fi
+          fi
+        done
+        echo "tags=$TAGS" >> $GITHUB_OUTPUT
+
+    - name: Build and push
+      uses: docker/build-push-action@v5
+      with:
+        push: true
+        tags: ${{ steps.tags.outputs.tags }}
+        build-args: ${{ inputs.buildArgs }}
+        target: ${{ inputs.env }}
+        cache-from: type=gha
+        cache-to: type=gha,mode=max
+
+    - name: Checkout jce-service-helm Repository
+      uses: actions/checkout@v4
+      with:
+        repository: team-monolith-product/jce-service-helm
+        path: jce-service-helm
+        token: ${{ secrets.MACHINE_TOKEN }}
+        ref: ${{ inputs.target }}
+
+    - name: Set changes
+      id: changes
+      run: |
+        CHANGES="{}"
+        for target in "${{ inputs.updateTargets }}"; do
+          VALUE_FILE_PATH=$(echo $target | jq -r '.valueFilePath')
+          if [ "$VALUE_FILE_PATH" != "null" ]; then
+            CHANGES=$(echo $CHANGES | jq -c ".\"$VALUE_FILE_PATH\".\"${{ inputs.propertyPath }}\" = \"${{ steps.date.outputs.date }}\"")
+          fi
+        done
+        echo "changes=$CHANGES" >> $GITHUB_OUTPUT
+
+    - name: Update Image Version in the related HelmChart value file
+      uses: fjogeleit/yaml-update-action@master
+      with:
+        repository: team-monolith-product/jce-service-helm
+        branch: ${{ inputs.target }}
+        message: 'auto: Update Image Version to ${{ steps.date.outputs.date }}'
+        token: ${{ secrets.MACHINE_TOKEN }}
+        workDir: jce-service-helm
+        changes: ${{ steps.changes.outputs.changes }}
