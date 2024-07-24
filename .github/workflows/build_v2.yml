@@ -56,19 +56,15 @@ jobs:
       id: date
       run: echo "date=$(TZ='Asia/Seoul' date +'%Y-%m-%dT%H-%M-%S')" >> $GITHUB_OUTPUT
 
+    - name: Set up JSON file
+      id: set-json
+      run: echo '${{ inputs.updateTargets }}' > updateTargets.json
+
     - name: Check for platform presence
       id: check-platform
       run: |
-        echo "111111"
-        read -r -d '' updateTargets << EOM
-        ${{ inputs.updateTargets }}
-        EOM
-        echo "222222"
-        echo "$updateTargets"
-        CONTAINS_AWS=$(echo "$updateTargets" | jq -r 'has("aws")')
-        CONTAINS_NCP=$(echo "$updateTargets" | jq -r 'has("ncp")')
-        echo "333333"
-        echo "$CONTAINS_AWS"
+        CONTAINS_AWS=$(cat updateTargets.json | jq -r 'has("aws")')
+        CONTAINS_NCP=$(cat updateTargets.json | jq -r 'has("ncp")')
         
         echo "contains_aws=$CONTAINS_AWS" >> $GITHUB_OUTPUT
         echo "contains_ncp=$CONTAINS_NCP" >> $GITHUB_OUTPUT
@@ -92,11 +88,7 @@ jobs:
       id: extract-ncp-registry
       if: ${{ steps.check-platform.outputs.contains_ncp == 'true' }}
       run: |
-        read -r -d '' updateTargets << EOM
-        ${{ inputs.updateTargets }}
-        EOM
-        NCP_REGISTRY=$(echo "$updateTargets" | jq -r '.ncp.registry')
-
+        NCP_REGISTRY=$(cat updateTargets.json | jq -r '.ncp.registry')
         echo "ncp_registry=$NCP_REGISTRY" >> $GITHUB_OUTPUT
 
     - name: Login to NCP Container Registry
@@ -111,12 +103,9 @@ jobs:
     - name: Set tags
       id: tags
       run: |
-        read -r -d '' updateTargets << EOM
-        ${{ inputs.updateTargets }}
-        EOM
         TAGS=""
-        for type in $(echo "$updateTargets" | jq -r 'keys[]'); do
-          TARGET=$(echo "$updateTargets" | jq -r ".$type")
+        for type in $(cat updateTargets.json | jq -r 'keys[]'); do
+          TARGET=$(cat updateTargets.json | jq -r ".$type")
           if [ "$type" == "aws" ]; then
             AWS_IMAGE_NAME=$(echo "$TARGET" | jq -r '.imageName')
             for VALUE_FILE_PATH in $(echo "$TARGET" | jq -r '.valueFilePath[]'); do
@@ -163,12 +152,9 @@ jobs:
     - name: Set changes
       id: changes
       run: |
-        read -r -d '' updateTargetsRaw << EOM
-        ${{ inputs.updateTargets }}
-        EOM
         CHANGES="{}"
-        for type in $(echo "$updateTargetsRaw" | jq -r 'keys[]'); do
-          TARGET=$(echo "$updateTargetsRaw" | jq -r ".$type")
+        for type in $(cat updateTargets.json | jq -r 'keys[]'); do
+          TARGET=$(cat updateTargets.json | jq -r ".$type")
           for VALUE_FILE_PATH in $(echo "$TARGET" | jq -r '.valueFilePath[]'); do
             if [ "$VALUE_FILE_PATH" != "null" ]; then
               CHANGES=$(echo $CHANGES | jq -c ".\"$VALUE_FILE_PATH\".\"${{ inputs.propertyPath }}\" = \"${{ steps.date.outputs.date }}\"")
