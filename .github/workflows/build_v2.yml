@@ -55,24 +55,15 @@ jobs:
     - name: Get current date time
       id: date
       run: echo "date=$(TZ='Asia/Seoul' date +'%Y-%m-%dT%H-%M-%S')" >> $GITHUB_OUTPUT
-      
-    - name: Store updateTargets
-      id: store-updatetargets
-      run: |
-        read -r -d '' updateTargets << EOM
-        ${{ inputs.updateTargets }}
-        EOM
-        echo "updateTargets=$updateTargets" >> $GITHUB_OUTPUT
 
     - name: Check for platform presence
       id: check-platform
       run: |
-        updateTargets='${{ steps.store-updatetargets.outputs.updateTargets }}'
-        CONTAINS_AWS=$(echo "$updateTargets" | jq -r 'has("aws")')
-        CONTAINS_NCP=$(echo "$updateTargets" | jq -r 'has("ncp")')
-
-        echo "contains_aws=$CONTAINS_AWS" >> $GITHUB_OUTPUT
-        echo "contains_ncp=$CONTAINS_NCP" >> $GITHUB_OUTPUT
+        read -r -d '' updateTargets << EOM
+        ${{ inputs.updateTargets }}
+        EOM
+        echo "contains_aws=$(echo "$updateTargets" | jq -r 'has("aws")')" >> $GITHUB_OUTPUT
+        echo "contains_ncp=$(echo "$updateTargets" | jq -r 'has("ncp")')" >> $GITHUB_OUTPUT
 
     # AWS 관련 작업
     - name: Configure AWS credentials
@@ -93,9 +84,10 @@ jobs:
       id: extract-ncp-registry
       if: ${{ steps.check-platform.outputs.contains_ncp == 'true' }}
       run: |
-        updateTargets='${{ steps.store-updatetargets.outputs.updateTargets }}'
-        NCP_REGISTRY=$(echo "$updateTargets" | jq -r '.ncp.registry')
-        echo "ncp_registry=$NCP_REGISTRY" >> $GITHUB_OUTPUT
+        read -r -d '' updateTargets << EOM
+        ${{ inputs.updateTargets }}
+        EOM
+        echo "ncp_registry=$(echo "$updateTargets" | jq -r '.ncp.registry')" >> $GITHUB_OUTPUT
 
     - name: Login to NCP Container Registry
       if: ${{ steps.check-platform.outputs.contains_ncp == 'true' }}
@@ -109,7 +101,9 @@ jobs:
     - name: Set tags
       id: tags
       run: |
-        updateTargets='${{ steps.store-updatetargets.outputs.updateTargets }}'
+        read -r -d '' updateTargets << EOM
+        ${{ inputs.updateTargets }}
+        EOM
         TAGS=""
         for type in $(echo "$updateTargets" | jq -r 'keys[]'); do
           TARGET=$(echo "$updateTargets" | jq -r ".$type")
@@ -159,7 +153,9 @@ jobs:
     - name: Set changes
       id: changes
       run: |
-        updateTargetsRaw='${{ steps.store-updatetargets.outputs.updateTargets }}'
+        read -r -d '' updateTargetsRaw << EOM
+        ${{ inputs.updateTargets }}
+        EOM
         CHANGES="{}"
         for type in $(echo "$updateTargetsRaw" | jq -r 'keys[]'); do
           TARGET=$(echo "$updateTargetsRaw" | jq -r ".$type")
