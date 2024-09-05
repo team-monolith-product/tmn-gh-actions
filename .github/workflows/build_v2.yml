@@ -1,3 +1,6 @@
+# v2.1 - 류호선
+#   DOCKER_SECRETS 를 추가하였습니다. (하위 호환성 유지)
+
 name: Build
 
 on:
@@ -38,6 +41,8 @@ on:
         required: false
       MACHINE_TOKEN:
         required: true
+      DOCKER_SECRETS:
+        required: false
 
 jobs:
   build:
@@ -129,6 +134,8 @@ jobs:
       with:
         push: true
         tags: ${{ steps.tags.outputs.tags }}
+        secrets: |
+          ${{ secrets.DOCKER_SECRETS }}
         build-args: ${{ inputs.buildArgs }}
         target: ${{ inputs.env }}
         cache-from: type=gha
