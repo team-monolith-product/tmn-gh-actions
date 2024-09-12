@@ -29,6 +29,9 @@ on:
       updateTargets:
         required: true
         type: string
+      dockerOutputs:
+        required: false
+        type: string
 
     secrets:
       AWS_ACCESS_KEY_ID:
@@ -140,6 +143,7 @@ jobs:
         target: ${{ inputs.env }}
         cache-from: type=gha
         cache-to: type=gha,mode=max
+        outputs: ${{ inputs.dockerOutputs }}
 
     - name: Checkout jce-service-helm Repository
       uses: actions/checkout@v4
