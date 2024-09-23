@@ -58,6 +58,10 @@ runs:
       run: ls -la
       shell: bash
 
+    - name: List files in the parent directory
+      run: ls -la ..
+      shell: bash
+
     - name: Set up Docker Buildx
       id: buildx
       uses: docker/setup-buildx-action@v3
