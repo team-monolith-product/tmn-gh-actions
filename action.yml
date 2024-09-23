@@ -50,7 +50,14 @@ outputs:
 runs:
   using: 'composite'
   steps:
-    # All steps, using inputs for secrets
+    - name: Print current working directory
+      run: pwd
+      shell: bash
+
+    - name: List files in the directory
+      run: ls -la
+      shell: bash
+
     - name: Set up Docker Buildx
       id: buildx
       uses: docker/setup-buildx-action@v3
