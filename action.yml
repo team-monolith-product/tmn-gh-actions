@@ -1,0 +1,199 @@
+name: Build Action
+description: Composite action for building and pushing Docker images.
+
+inputs:
+  env:
+    required: true
+    description: Environment for the build.
+  target:
+    required: true
+    description: Target branch or tag.
+  propertyPath:
+    required: false
+    default: 'image.tag'
+    description: Property path in the value files.
+  buildArgs:
+    required: false
+    description: Build arguments for Docker.
+  # interface UpdateTarget = {
+  #   "registry": string;
+  #   "imageName": string;
+  #   "valueFilePath": string[];
+  # }
+  # interface UpdateTargets = {
+  #   "aws": UpdateTarget;
+  #   "ncp": UpdateTarget;
+  # }
+  updateTargets:
+    required: true
+    description: JSON string specifying update targets.
+  dockerOutputs:
+    required: false
+    description: Docker outputs.
+  dockerTarget:
+    required: false
+    description: Docker target. It uses the value of `env` if not specified.
+
+  # Accept secrets as inputs
+  AWS_ACCESS_KEY_ID:
+    required: false
+    description: AWS Access Key ID.
+  AWS_SECRET_ACCESS_KEY:
+    required: false
+    description: AWS Secret Access Key.
+  NCP_ACCESS_KEY_ID:
+    required: false
+    description: NCP Access Key ID.
+  NCP_SECRET_KEY:
+    required: false
+    description: NCP Secret Key.
+  MACHINE_TOKEN:
+    required: true
+    description: Machine Token.
+  DOCKER_SECRETS:
+    required: false
+    description: Docker Secrets.
+
+outputs:
+  date:
+    description: The date and time of the build.
+    value: ${{ steps.date.outputs.date }}
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Print current working directory
+      run: pwd
+      shell: bash
+
+    - name: List files in the directory
+      run: ls -la
+      shell: bash
+
+    - name: List files in the parent directory
+      run: ls -la ..
+      shell: bash
+
+    - name: Set up Docker Buildx
+      id: buildx
+      uses: docker/setup-buildx-action@v3
+
+    - name: Get current date time
+      id: date
+      run: echo "date=$(TZ='Asia/Seoul' date +'%Y-%m-%dT%H-%M-%S')" >> $GITHUB_OUTPUT
+      shell: bash
+
+    - name: Set up JSON file
+      id: set-json
+      run: echo '${{ inputs.updateTargets }}' > updateTargets.json
+      shell: bash
+
+    - name: Check for platform presence
+      id: check-platform
+      run: |
+        CONTAINS_AWS=$(cat updateTargets.json | jq -r 'has("aws")')
+        CONTAINS_NCP=$(cat updateTargets.json | jq -r 'has("ncp")')
+        echo "contains_aws=$CONTAINS_AWS" >> $GITHUB_OUTPUT
+        echo "contains_ncp=$CONTAINS_NCP" >> $GITHUB_OUTPUT
+      shell: bash
+
+    # AWS related steps
+    - name: Configure AWS credentials
+      if: ${{ steps.check-platform.outputs.contains_aws == 'true' }}
+      uses: aws-actions/configure-aws-credentials@v4
+      with:
+        aws-access-key-id: ${{ inputs.AWS_ACCESS_KEY_ID }}
+        aws-secret-access-key: ${{ inputs.AWS_SECRET_ACCESS_KEY }}
+        aws-region: ap-northeast-2
+
+    - name: Login to Amazon ECR
+      if: ${{ steps.check-platform.outputs.contains_aws == 'true' }}
+      id: login-ecr
+      uses: aws-actions/amazon-ecr-login@v2
+
+    # NCP related steps
+    - name: Login to NCP Container Registry
+      if: ${{ steps.check-platform.outputs.contains_ncp == 'true' }}
+      uses: docker/login-action@v3
+      with:
+        registry: ${{ fromJSON(inputs.updateTargets).ncp.registry }}
+        username: ${{ inputs.NCP_ACCESS_KEY_ID }}
+        password: ${{ inputs.NCP_SECRET_KEY }}
+        logout: false
+
+    - name: Set tags
+      id: tags
+      run: |
+        TAGS=""
+        for type in $(cat updateTargets.json | jq -r 'keys[]'); do
+          TARGET=$(cat updateTargets.json | jq -r ".$type")
+          if [ "$type" == "aws" ]; then
+            AWS_IMAGE_NAME=$(echo "$TARGET" | jq -r '.imageName')
+            for VALUE_FILE_PATH in $(echo "$TARGET" | jq -r '.valueFilePath[]'); do
+              TAG="${{ steps.login-ecr.outputs.registry }}/${AWS_IMAGE_NAME}:${{ steps.date.outputs.date }}"
+              if [ -n "$TAGS" ]; then
+                TAGS="$TAGS,$TAG"
+              else
+                TAGS="$TAG"
+              fi
+            done
+          elif [ "$type" == "ncp" ]; then
+            NCP_REGISTRY=$(echo "$TARGET" | jq -r '.registry')
+            NCP_IMAGE_NAME=$(echo "$TARGET" | jq -r '.imageName')
+            for VALUE_FILE_PATH in $(echo "$TARGET" | jq -r '.valueFilePath[]'); do
+              TAG="${NCP_REGISTRY}/${NCP_IMAGE_NAME}:${{ steps.date.outputs.date }}"
+              if [ -n "$TAGS" ]; then
+                TAGS="$TAGS,$TAG"
+              else
+                TAGS="$TAG"
+              fi
+            done
+          fi
+        done
+        echo "tags=$TAGS" >> $GITHUB_OUTPUT
+      shell: bash
+
+    - name: Build and push
+      uses: docker/build-push-action@v5
+      with:
+        push: true
+        tags: ${{ steps.tags.outputs.tags }}
+        secrets: ${{ inputs.DOCKER_SECRETS }}
+        build-args: ${{ inputs.buildArgs }}
+        target: ${{ inputs.dockerTarget || inputs.env }}
+        cache-from: type=gha
+        cache-to: type=gha,mode=max
+        outputs: ${{ inputs.dockerOutputs }}
+
+    - name: Checkout jce-service-helm Repository
+      uses: actions/checkout@v4
+      with:
+        repository: team-monolith-product/jce-service-helm
+        path: jce-service-helm
+        token: ${{ inputs.MACHINE_TOKEN }}
+        ref: ${{ inputs.target }}
+
+    - name: Set changes
+      id: changes
+      run: |
+        CHANGES="{}"
+        for type in $(cat updateTargets.json | jq -r 'keys[]'); do
+          TARGET=$(cat updateTargets.json | jq -r ".$type")
+          for VALUE_FILE_PATH in $(echo "$TARGET" | jq -r '.valueFilePath[]'); do
+            if [ "$VALUE_FILE_PATH" != "null" ]; then
+              CHANGES=$(echo $CHANGES | jq -c ".\"$VALUE_FILE_PATH\".\"${{ inputs.propertyPath }}\" = \"${{ steps.date.outputs.date }}\"")
+            fi
+          done
+        done
+        echo "changes=$CHANGES" >> $GITHUB_OUTPUT
+      shell: bash
+
+    - name: Update Image Version in the related HelmChart value file
+      uses: fjogeleit/yaml-update-action@master
+      with:
+        repository: team-monolith-product/jce-service-helm
+        branch: ${{ inputs.target }}
+        message: 'auto: Update Image Version to ${{ steps.date.outputs.date }}'
+        token: ${{ inputs.MACHINE_TOKEN }}
+        workDir: jce-service-helm
+        changes: ${{ steps.changes.outputs.changes }}
