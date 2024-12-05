@@ -37,9 +37,6 @@ on:
       updateTargets:
         required: true
         type: string
-      dockerOutputs:
-        required: false
-        type: string
       dockerTarget:
         required: false
         type: string
@@ -155,7 +152,6 @@ jobs:
         target: ${{ inputs.dockerTarget || inputs.env }}
         cache-from: type=gha
         cache-to: type=gha,mode=max
-        outputs: ${{ inputs.dockerOutputs }}
 
     - name: Checkout jce-service-helm Repository
       uses: actions/checkout@v4
