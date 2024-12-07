@@ -79,14 +79,14 @@ runs:
 
     - name: Set up JSON file
       id: set-json
-      run: echo '${{ inputs.updateTargets }}' > updateTargets.json
+      run: echo '${{ inputs.updateTargets }}' > ~/updateTargets.json
       shell: bash
 
     - name: Check for platform presence
       id: check-platform
       run: |
-        CONTAINS_AWS=$(cat updateTargets.json | jq -r 'has("aws")')
-        CONTAINS_NCP=$(cat updateTargets.json | jq -r 'has("ncp")')
+        CONTAINS_AWS=$(cat ~/updateTargets.json | jq -r 'has("aws")')
+        CONTAINS_NCP=$(cat ~/updateTargets.json | jq -r 'has("ncp")')
         echo "contains_aws=$CONTAINS_AWS" >> $GITHUB_OUTPUT
         echo "contains_ncp=$CONTAINS_NCP" >> $GITHUB_OUTPUT
       shell: bash
@@ -119,8 +119,8 @@ runs:
       id: tags
       run: |
         TAGS=""
-        for type in $(cat updateTargets.json | jq -r 'keys[]'); do
-          TARGET=$(cat updateTargets.json | jq -r ".$type")
+        for type in $(cat ~/updateTargets.json | jq -r 'keys[]'); do
+          TARGET=$(cat ~/updateTargets.json | jq -r ".$type")
           if [ "$type" == "aws" ]; then
             AWS_IMAGE_NAME=$(echo "$TARGET" | jq -r '.imageName')
             for VALUE_FILE_PATH in $(echo "$TARGET" | jq -r '.valueFilePath[]'); do
@@ -164,7 +164,7 @@ runs:
       uses: actions/checkout@v4
       with:
         repository: team-monolith-product/jce-service-helm
-        path: jce-service-helm
+        path: ../jce-service-helm
         token: ${{ inputs.MACHINE_TOKEN }}
         ref: ${{ inputs.target }}
 
@@ -172,8 +172,8 @@ runs:
       id: changes
       run: |
         CHANGES="{}"
-        for type in $(cat updateTargets.json | jq -r 'keys[]'); do
-          TARGET=$(cat updateTargets.json | jq -r ".$type")
+        for type in $(cat ~/updateTargets.json | jq -r 'keys[]'); do
+          TARGET=$(cat ~/updateTargets.json | jq -r ".$type")
           for VALUE_FILE_PATH in $(echo "$TARGET" | jq -r '.valueFilePath[]'); do
             if [ "$VALUE_FILE_PATH" != "null" ]; then
               CHANGES=$(echo $CHANGES | jq -c ".\"$VALUE_FILE_PATH\".\"${{ inputs.propertyPath }}\" = \"${{ steps.date.outputs.date }}\"")
@@ -190,10 +190,6 @@ runs:
         branch: ${{ inputs.target }}
         message: 'auto: Update Image Version to ${{ steps.date.outputs.date }}'
         token: ${{ inputs.MACHINE_TOKEN }}
-        workDir: jce-service-helm
+        workDir: ../jce-service-helm
         changes: ${{ steps.changes.outputs.changes }}
-
-    - name: clean up
-      run: rm -f updateTargets.json && rm -rf jce-service-helm
-      shell: bash
 
