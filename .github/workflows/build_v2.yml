@@ -25,13 +25,25 @@ on:
       buildArgs:
         required: false
         type: string
-      # Update targets (JSON string)
+      # interface UpdateTarget = {
+      #   "registry": string;
+      #   "imageName": string;
+      #   "valueFilePath": string[];
+      # }
+      # interface UpdateTargets = {
+      #   "aws": UpdateTarget;
+      #   "ncp": UpdateTarget;
+      # }
       updateTargets:
         required: true
         type: string
       dockerOutputs:
         required: false
         type: string
+      dockerTarget:
+        required: false
+        type: string
+        description: Docker target. It uses the value of `env` if not specified.
 
     secrets:
       AWS_ACCESS_KEY_ID:
@@ -140,7 +152,7 @@ jobs:
         secrets: |
           ${{ secrets.DOCKER_SECRETS }}
         build-args: ${{ inputs.buildArgs }}
-        target: ${{ inputs.env }}
+        target: ${{ inputs.dockerTarget || inputs.env }}
         cache-from: type=gha
         cache-to: type=gha,mode=max
         outputs: ${{ inputs.dockerOutputs }}
