@@ -192,3 +192,8 @@ runs:
         token: ${{ inputs.MACHINE_TOKEN }}
         workDir: jce-service-helm
         changes: ${{ steps.changes.outputs.changes }}
+
+    - name: clean up
+      run: rm -f updateTargets.json && rm -rf jce-service-helm
+      shell: bash
+
