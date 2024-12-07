@@ -164,7 +164,7 @@ runs:
       uses: actions/checkout@v4
       with:
         repository: team-monolith-product/jce-service-helm
-        path: ../jce-service-helm
+        path: jce-service-helm
         token: ${{ inputs.MACHINE_TOKEN }}
         ref: ${{ inputs.target }}
 
@@ -190,6 +190,6 @@ runs:
         branch: ${{ inputs.target }}
         message: 'auto: Update Image Version to ${{ steps.date.outputs.date }}'
         token: ${{ inputs.MACHINE_TOKEN }}
-        workDir: ../jce-service-helm
+        workDir: jce-service-helm
         changes: ${{ steps.changes.outputs.changes }}
 
