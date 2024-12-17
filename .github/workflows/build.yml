@@ -7,7 +7,7 @@ on:
       runner:
         required: false
         type: string
-        default: ubuntu-latest
+        default: ubuntu-22.04
       # Common
       env:
         required: true
