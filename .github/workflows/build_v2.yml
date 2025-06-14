@@ -131,27 +131,28 @@ jobs:
         TAGS=""
         for type in $(jq -r 'keys[]' updateTargets.json); do
           TARGET=$(jq -r ".$type" updateTargets.json)
+
           if [ "$type" == "aws" ]; then
             AWS_IMAGE_NAME=$(echo "$TARGET" | jq -r '.imageName')
-            for VALUE_FILE_PATH in $(echo "$TARGET" | jq -r '.valueFilePath[]'); do
-              TAG="${{ steps.login-ecr.outputs.registry }}/${AWS_IMAGE_NAME}:${{ steps.date.outputs.date }}"
-              if [ -n "$TAGS" ]; then
-                TAGS="$TAGS,$TAG"
-              else
-                TAGS="$TAG"
-              fi
-            done
+
+            TAG="${{ steps.login-ecr.outputs.registry }}/${AWS_IMAGE_NAME}:${{ steps.date.outputs.date }}"
+
+            if [ -n "$TAGS" ]; then
+              TAGS="$TAGS,$TAG"
+            else
+              TAGS="$TAG"
+            fi
           elif [ "$type" == "ncp" ]; then
             NCP_REGISTRY=$(echo "$TARGET" | jq -r '.registry')
             NCP_IMAGE_NAME=$(echo "$TARGET" | jq -r '.imageName')
-            for VALUE_FILE_PATH in $(echo "$TARGET" | jq -r '.valueFilePath[]'); do
-              TAG="${NCP_REGISTRY}/${NCP_IMAGE_NAME}:${{ steps.date.outputs.date }}"
-              if [ -n "$TAGS" ]; then
-                TAGS="$TAGS,$TAG"
-              else
-                TAGS="$TAG"
-              fi
-            done
+
+            TAG="${NCP_REGISTRY}/${NCP_IMAGE_NAME}:${{ steps.date.outputs.date }}"
+
+            if [ -n "$TAGS" ]; then
+              TAGS="$TAGS,$TAG"
+            else
+              TAGS="$TAG"
+            fi
           fi
         done
         echo "tags=$TAGS" >> $GITHUB_OUTPUT
