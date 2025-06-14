@@ -95,8 +95,8 @@ jobs:
     - name: Check for platform presence
       id: check-platform
       run: |
-        CONTAINS_AWS=$(cat updateTargets.json | jq -r 'has("aws")')
-        CONTAINS_NCP=$(cat updateTargets.json | jq -r 'has("ncp")')
+        CONTAINS_AWS=$(jq -r 'has("aws")' updateTargets.json)
+        CONTAINS_NCP=$(jq -r 'has("ncp")' updateTargets.json)
         
         echo "contains_aws=$CONTAINS_AWS" >> $GITHUB_OUTPUT
         echo "contains_ncp=$CONTAINS_NCP" >> $GITHUB_OUTPUT
@@ -129,8 +129,8 @@ jobs:
       id: tags
       run: |
         TAGS=""
-        for type in $(cat updateTargets.json | jq -r 'keys[]'); do
-          TARGET=$(cat updateTargets.json | jq -r ".$type")
+        for type in $(jq -r 'keys[]' updateTargets.json); do
+          TARGET=$(jq -r ".$type" updateTargets.json)
           if [ "$type" == "aws" ]; then
             AWS_IMAGE_NAME=$(echo "$TARGET" | jq -r '.imageName')
             for VALUE_FILE_PATH in $(echo "$TARGET" | jq -r '.valueFilePath[]'); do
@@ -181,8 +181,8 @@ jobs:
       id: changes
       run: |
         CHANGES="{}"
-        for type in $(cat updateTargets.json | jq -r 'keys[]'); do
-          TARGET=$(cat updateTargets.json | jq -r ".$type")
+        for type in $(jq -r 'keys[]' updateTargets.json); do
+          TARGET=$(jq -r ".$type" updateTargets.json)
           for VALUE_FILE_PATH in $(echo "$TARGET" | jq -r '.valueFilePath[]'); do
             if [ "$VALUE_FILE_PATH" != "null" ]; then
               CHANGES=$(echo $CHANGES | jq -c ".\"$VALUE_FILE_PATH\".\"${{ inputs.propertyPath }}\" = \"${{ steps.date.outputs.date }}\"")
