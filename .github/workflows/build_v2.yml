@@ -3,7 +3,8 @@
 # v2.2 - 류호선
 #   submodules: recursive 추가
 # v2.3 - 류호선
-#   - helmRepository 입력값을 추가하였습니다. (기본값: jce-service-helm)
+#   - helmRepository 입력값을 추가하였습니다. (기본값: 'jce-service-helm')
+#   - buildContext 입력값을 추가하였습니다. (기본값: '.')
 name: Build
 
 on:
@@ -48,6 +49,10 @@ on:
         required: false
         type: string
         default: jce-service-helm
+      buildContext:
+        required: false
+        type: string
+        default: '.'
 
     secrets:
       AWS_ACCESS_KEY_ID:
@@ -159,6 +164,7 @@ jobs:
         secrets: |
           ${{ secrets.DOCKER_SECRETS }}
         build-args: ${{ inputs.buildArgs }}
+        context: ${{ inputs.buildContext }}
         target: ${{ inputs.dockerTarget || inputs.env }}
         cache-from: type=gha
         cache-to: type=gha,mode=max
