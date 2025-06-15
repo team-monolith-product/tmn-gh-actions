@@ -2,6 +2,9 @@
 #   DOCKER_SECRETS 를 추가하였습니다. (하위 호환성 유지)
 # v2.2 - 류호선
 #   submodules: recursive 추가
+# v2.3 - 류호선
+#   - helmRepository 입력값을 추가하였습니다. (기본값: 'jce-service-helm')
+#   - buildContext 입력값을 추가하였습니다. (기본값: '.')
 name: Build
 
 on:
@@ -42,6 +45,14 @@ on:
         required: false
         type: string
         description: Docker target. It uses the value of `env` if not specified.
+      helmRepository:
+        required: false
+        type: string
+        default: jce-service-helm
+      buildContext:
+        required: false
+        type: string
+        default: '.'
 
     secrets:
       AWS_ACCESS_KEY_ID:
@@ -84,8 +95,8 @@ jobs:
     - name: Check for platform presence
       id: check-platform
       run: |
-        CONTAINS_AWS=$(cat updateTargets.json | jq -r 'has("aws")')
-        CONTAINS_NCP=$(cat updateTargets.json | jq -r 'has("ncp")')
+        CONTAINS_AWS=$(jq -r 'has("aws")' updateTargets.json)
+        CONTAINS_NCP=$(jq -r 'has("ncp")' updateTargets.json)
         
         echo "contains_aws=$CONTAINS_AWS" >> $GITHUB_OUTPUT
         echo "contains_ncp=$CONTAINS_NCP" >> $GITHUB_OUTPUT
@@ -118,29 +129,30 @@ jobs:
       id: tags
       run: |
         TAGS=""
-        for type in $(cat updateTargets.json | jq -r 'keys[]'); do
-          TARGET=$(cat updateTargets.json | jq -r ".$type")
+        for type in $(jq -r 'keys[]' updateTargets.json); do
+          TARGET=$(jq -r ".$type" updateTargets.json)
+
           if [ "$type" == "aws" ]; then
             AWS_IMAGE_NAME=$(echo "$TARGET" | jq -r '.imageName')
-            for VALUE_FILE_PATH in $(echo "$TARGET" | jq -r '.valueFilePath[]'); do
-              TAG="${{ steps.login-ecr.outputs.registry }}/${AWS_IMAGE_NAME}:${{ steps.date.outputs.date }}"
-              if [ -n "$TAGS" ]; then
-                TAGS="$TAGS,$TAG"
-              else
-                TAGS="$TAG"
-              fi
-            done
+
+            TAG="${{ steps.login-ecr.outputs.registry }}/${AWS_IMAGE_NAME}:${{ steps.date.outputs.date }}"
+
+            if [ -n "$TAGS" ]; then
+              TAGS="$TAGS,$TAG"
+            else
+              TAGS="$TAG"
+            fi
           elif [ "$type" == "ncp" ]; then
             NCP_REGISTRY=$(echo "$TARGET" | jq -r '.registry')
             NCP_IMAGE_NAME=$(echo "$TARGET" | jq -r '.imageName')
-            for VALUE_FILE_PATH in $(echo "$TARGET" | jq -r '.valueFilePath[]'); do
-              TAG="${NCP_REGISTRY}/${NCP_IMAGE_NAME}:${{ steps.date.outputs.date }}"
-              if [ -n "$TAGS" ]; then
-                TAGS="$TAGS,$TAG"
-              else
-                TAGS="$TAG"
-              fi
-            done
+
+            TAG="${NCP_REGISTRY}/${NCP_IMAGE_NAME}:${{ steps.date.outputs.date }}"
+
+            if [ -n "$TAGS" ]; then
+              TAGS="$TAGS,$TAG"
+            else
+              TAGS="$TAG"
+            fi
           fi
         done
         echo "tags=$TAGS" >> $GITHUB_OUTPUT
@@ -153,15 +165,16 @@ jobs:
         secrets: |
           ${{ secrets.DOCKER_SECRETS }}
         build-args: ${{ inputs.buildArgs }}
+        context: ${{ inputs.buildContext }}
         target: ${{ inputs.dockerTarget || inputs.env }}
         cache-from: type=gha
         cache-to: type=gha,mode=max
 
-    - name: Checkout jce-service-helm Repository
+    - name: Checkout to Helm Repository
       uses: actions/checkout@v4
       with:
-        repository: team-monolith-product/jce-service-helm
-        path: jce-service-helm
+        repository: team-monolith-product/${{ inputs.helmRepository }}
+        path: ${{ inputs.helmRepository }}
         token: ${{ secrets.MACHINE_TOKEN }}
         ref: ${{ inputs.target }}
 
@@ -169,8 +182,8 @@ jobs:
       id: changes
       run: |
         CHANGES="{}"
-        for type in $(cat updateTargets.json | jq -r 'keys[]'); do
-          TARGET=$(cat updateTargets.json | jq -r ".$type")
+        for type in $(jq -r 'keys[]' updateTargets.json); do
+          TARGET=$(jq -r ".$type" updateTargets.json)
           for VALUE_FILE_PATH in $(echo "$TARGET" | jq -r '.valueFilePath[]'); do
             if [ "$VALUE_FILE_PATH" != "null" ]; then
               CHANGES=$(echo $CHANGES | jq -c ".\"$VALUE_FILE_PATH\".\"${{ inputs.propertyPath }}\" = \"${{ steps.date.outputs.date }}\"")
@@ -182,9 +195,9 @@ jobs:
     - name: Update Image Version in the related HelmChart value file
       uses: fjogeleit/yaml-update-action@master
       with:
-        repository: team-monolith-product/jce-service-helm
+        repository: team-monolith-product/${{ inputs.helmRepository }}
         branch: ${{ inputs.target }}
         message: 'auto: Update Image Version to ${{ steps.date.outputs.date }}'
         token: ${{ secrets.MACHINE_TOKEN }}
-        workDir: jce-service-helm
+        workDir: ${{ inputs.helmRepository }}
         changes: ${{ steps.changes.outputs.changes }}
