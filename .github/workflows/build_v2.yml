@@ -5,6 +5,8 @@
 # v2.3 - 류호선
 #   - helmRepository 입력값을 추가하였습니다. (기본값: 'jce-service-helm')
 #   - buildContext 입력값을 추가하였습니다. (기본값: '.')
+# v2.4 - 류호선
+#   - buildContext 존재 시, 빌드 태그에 prefix로 추가합니다.
 name: Build
 
 on:
@@ -84,9 +86,16 @@ jobs:
       id: buildx
       uses: docker/setup-buildx-action@v3
 
-    - name: Get current date time
-      id: date
-      run: echo "date=$(TZ='Asia/Seoul' date +'%Y-%m-%dT%H-%M-%S')" >> $GITHUB_OUTPUT
+    - name: Name tag
+      id: name-tag
+      env:
+        CONTEXT: ${{ inputs.buildContext }}
+      run: |
+        PREFIX=''
+        if [ -n "$CONTEXT" ]; then
+          PREFIX="$CONTEXT-"
+        fi
+        echo "tag=${PREFIX}$(TZ='Asia/Seoul' date +'%Y-%m-%dT%H-%M-%S')" >> $GITHUB_OUTPUT
 
     - name: Set up JSON file
       id: set-json
@@ -135,7 +144,7 @@ jobs:
           if [ "$type" == "aws" ]; then
             AWS_IMAGE_NAME=$(echo "$TARGET" | jq -r '.imageName')
 
-            TAG="${{ steps.login-ecr.outputs.registry }}/${AWS_IMAGE_NAME}:${{ steps.date.outputs.date }}"
+            TAG="${{ steps.login-ecr.outputs.registry }}/${AWS_IMAGE_NAME}:${{ steps.name-tag.outputs.tag }}"
 
             if [ -n "$TAGS" ]; then
               TAGS="$TAGS,$TAG"
@@ -146,7 +155,7 @@ jobs:
             NCP_REGISTRY=$(echo "$TARGET" | jq -r '.registry')
             NCP_IMAGE_NAME=$(echo "$TARGET" | jq -r '.imageName')
 
-            TAG="${NCP_REGISTRY}/${NCP_IMAGE_NAME}:${{ steps.date.outputs.date }}"
+            TAG="${NCP_REGISTRY}/${NCP_IMAGE_NAME}:${{ steps.name-tag.outputs.tag }}"
 
             if [ -n "$TAGS" ]; then
               TAGS="$TAGS,$TAG"
@@ -186,7 +195,7 @@ jobs:
           TARGET=$(jq -r ".$type" updateTargets.json)
           for VALUE_FILE_PATH in $(echo "$TARGET" | jq -r '.valueFilePath[]'); do
             if [ "$VALUE_FILE_PATH" != "null" ]; then
-              CHANGES=$(echo $CHANGES | jq -c ".\"$VALUE_FILE_PATH\".\"${{ inputs.propertyPath }}\" = \"${{ steps.date.outputs.date }}\"")
+              CHANGES=$(echo $CHANGES | jq -c ".\"$VALUE_FILE_PATH\".\"${{ inputs.propertyPath }}\" = \"${{ steps.name-tag.outputs.tag }}\"")
             fi
           done
         done
@@ -197,7 +206,7 @@ jobs:
       with:
         repository: team-monolith-product/${{ inputs.helmRepository }}
         branch: ${{ inputs.target }}
-        message: 'auto: Update Image Version to ${{ steps.date.outputs.date }}'
+        message: 'auto: Update Image Version to ${{ steps.name-tag.outputs.tag }}'
         token: ${{ secrets.MACHINE_TOKEN }}
         workDir: ${{ inputs.helmRepository }}
         changes: ${{ steps.changes.outputs.changes }}
