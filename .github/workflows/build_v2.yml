@@ -55,7 +55,6 @@ on:
       buildContext:
         required: false
         type: string
-        default: '.'
 
     secrets:
       AWS_ACCESS_KEY_ID:
@@ -93,7 +92,7 @@ jobs:
         CONTEXT: ${{ inputs.buildContext }}
       run: |
         PREFIX=''
-        if [ "$CONTEXT" != "." ]; then
+        if [ -n "$CONTEXT" ]; then
           PREFIX="$CONTEXT-"
         fi
         echo "tag=${PREFIX}$(TZ='Asia/Seoul' date +'%Y-%m-%dT%H-%M-%S')" >> $GITHUB_OUTPUT
