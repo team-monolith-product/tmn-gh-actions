@@ -5,6 +5,9 @@
 # v2.3 - 류호선
 #   - helmRepository 입력값을 추가하였습니다. (기본값: 'jce-service-helm')
 #   - buildContext 입력값을 추가하였습니다. (기본값: '.')
+# v2.4 - 류호선
+#   - buildContext 존재 시, 빌드 태그에 prefix로 추가합니다.
+#   - yq를 사용하여 수동으로 태그 업데이트
 name: Build
 
 on:
@@ -84,9 +87,16 @@ jobs:
       id: buildx
       uses: docker/setup-buildx-action@v3
 
-    - name: Get current date time
-      id: date
-      run: echo "date=$(TZ='Asia/Seoul' date +'%Y-%m-%dT%H-%M-%S')" >> $GITHUB_OUTPUT
+    - name: Name tag
+      id: name-tag
+      env:
+        CONTEXT: ${{ inputs.buildContext }}
+      run: |
+        PREFIX=''
+        if [ "$CONTEXT" != "." ]; then
+          PREFIX="$CONTEXT-"
+        fi
+        echo "tag=${PREFIX}$(TZ='Asia/Seoul' date +'%Y-%m-%dT%H-%M-%S')" >> $GITHUB_OUTPUT
 
     - name: Set up JSON file
       id: set-json
@@ -135,7 +145,7 @@ jobs:
           if [ "$type" == "aws" ]; then
             AWS_IMAGE_NAME=$(echo "$TARGET" | jq -r '.imageName')
 
-            TAG="${{ steps.login-ecr.outputs.registry }}/${AWS_IMAGE_NAME}:${{ steps.date.outputs.date }}"
+            TAG="${{ steps.login-ecr.outputs.registry }}/${AWS_IMAGE_NAME}:${{ steps.name-tag.outputs.tag }}"
 
             if [ -n "$TAGS" ]; then
               TAGS="$TAGS,$TAG"
@@ -146,7 +156,7 @@ jobs:
             NCP_REGISTRY=$(echo "$TARGET" | jq -r '.registry')
             NCP_IMAGE_NAME=$(echo "$TARGET" | jq -r '.imageName')
 
-            TAG="${NCP_REGISTRY}/${NCP_IMAGE_NAME}:${{ steps.date.outputs.date }}"
+            TAG="${NCP_REGISTRY}/${NCP_IMAGE_NAME}:${{ steps.name-tag.outputs.tag }}"
 
             if [ -n "$TAGS" ]; then
               TAGS="$TAGS,$TAG"
@@ -186,18 +196,42 @@ jobs:
           TARGET=$(jq -r ".$type" updateTargets.json)
           for VALUE_FILE_PATH in $(echo "$TARGET" | jq -r '.valueFilePath[]'); do
             if [ "$VALUE_FILE_PATH" != "null" ]; then
-              CHANGES=$(echo $CHANGES | jq -c ".\"$VALUE_FILE_PATH\".\"${{ inputs.propertyPath }}\" = \"${{ steps.date.outputs.date }}\"")
+              CHANGES=$(echo $CHANGES | jq -c ".\"$VALUE_FILE_PATH\".\"${{ inputs.propertyPath }}\" = \"${{ steps.name-tag.outputs.tag }}\"")
             fi
           done
         done
         echo "changes=$CHANGES" >> $GITHUB_OUTPUT
 
-    - name: Update Image Version in the related HelmChart value file
-      uses: fjogeleit/yaml-update-action@master
+    # 주피터와 공통으로 사용할 수 있도록 yq를 사용하여 Helm 차트의 값을 수정합니다.
+    # yaml-update-action 을 사용하는 경우에, 적용된 merge 문법들이 모두 랜더링 되는 현상이 발생합니다.
+    # https://github.com/team-monolith-product/jce-jupyter-hub-helm/commit/1520f9b003cdd9e79c872fbe7a636a92756b6eac
+    - name: Modify Helm Chart
+      uses: mikefarah/yq@v4
+      env:
+        CHANGES: ${{ steps.changes.outputs.changes }}
       with:
-        repository: team-monolith-product/${{ inputs.helmRepository }}
-        branch: ${{ inputs.target }}
-        message: 'auto: Update Image Version to ${{ steps.date.outputs.date }}'
-        token: ${{ secrets.MACHINE_TOKEN }}
-        workDir: ${{ inputs.helmRepository }}
-        changes: ${{ steps.changes.outputs.changes }}
+        cmd: | # sh shell
+          apk add --no-cache jq
+
+          for change in $(echo "$CHANGES" | jq -c 'to_entries[]'); do
+            FILE=$(echo "$change" | jq -r '.key')
+
+            for kv in $(echo "$change" | jq -c '.value | to_entries[]'); do
+              VALUE_PATH=$(echo "$kv" | jq -r '.key')
+              VALUE=$(echo "$kv" | jq -r '.value')
+
+              P=".$VALUE_PATH" V="$VALUE" \
+              yq eval -i 'eval(strenv(P)) = strenv(V)' "${{ inputs.helmRepository }}/$FILE"
+            done
+          done
+
+    - name: Commit and Push
+      env:
+        TARGET: ${{ inputs.target }}
+      run: |
+        cd ${{ inputs.helmRepository }}
+        git config --global user.name "github-machine-monolith"
+        git config --global user.email "github.machine.monolith@gmail.com"
+        git add .
+        git commit -m 'auto: Update Image Version to ${{ steps.name-tag.outputs.tag }}'
+        git push origin $TARGET
