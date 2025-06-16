@@ -55,7 +55,6 @@ on:
       buildContext:
         required: false
         type: string
-        default: '.'
 
     secrets:
       AWS_ACCESS_KEY_ID:
