@@ -190,6 +190,10 @@ jobs:
     needs: build
 
     steps:
+    - name: Set up JSON file
+      id: set-json
+      run: echo '${{ inputs.updateTargets }}' > updateTargets.json
+
     - name: Checkout to Helm Repository
       uses: actions/checkout@v4
       with:
