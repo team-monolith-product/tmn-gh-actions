@@ -8,6 +8,8 @@
 # v2.4 - 류호선
 #   - buildContext 존재 시, 빌드 태그에 prefix로 추가합니다.
 #   - yq를 사용하여 수동으로 태그 업데이트
+# v2.5 - 류호선
+#   - Helm 차트 수정 부분을 별도의 job 으로 분리하였습니다.
 name: Build
 
 on:
@@ -71,8 +73,11 @@ on:
         required: false
 
 jobs:
+  # 1. 도커 이미지를 빌드하고 푸시합니다.
   build:
     runs-on: ${{ inputs.runner }}
+    outputs:
+      tag: ${{ steps.name-tag.outputs.tag }}
 
     steps:
     - name: Checkout
@@ -179,6 +184,12 @@ jobs:
         cache-from: type=gha
         cache-to: type=gha,mode=max
 
+  # 2. Helm 차트의 이미지를 업데이트하고 커밋합니다.
+  update-tag:
+    runs-on: ${{ inputs.runner }}
+    needs: build
+
+    steps:
     - name: Checkout to Helm Repository
       uses: actions/checkout@v4
       with:
@@ -195,7 +206,7 @@ jobs:
           TARGET=$(jq -r ".$type" updateTargets.json)
           for VALUE_FILE_PATH in $(echo "$TARGET" | jq -r '.valueFilePath[]'); do
             if [ "$VALUE_FILE_PATH" != "null" ]; then
-              CHANGES=$(echo $CHANGES | jq -c ".\"$VALUE_FILE_PATH\".\"${{ inputs.propertyPath }}\" = \"${{ steps.name-tag.outputs.tag }}\"")
+              CHANGES=$(echo $CHANGES | jq -c ".\"$VALUE_FILE_PATH\".\"${{ inputs.propertyPath }}\" = \"${{ needs.build.outputs.tag }}\"")
             fi
           done
         done
@@ -232,5 +243,5 @@ jobs:
         git config --global user.name "github-machine-monolith"
         git config --global user.email "github.machine.monolith@gmail.com"
         git add .
-        git commit -m 'auto: Update Image Version to ${{ steps.name-tag.outputs.tag }}'
+        git commit -m 'auto: Update Image Version to ${{ needs.build.outputs.tag }}'
         git push origin $TARGET
