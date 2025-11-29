@@ -10,6 +10,7 @@
 #   - yq를 사용하여 수동으로 태그 업데이트
 # v2.5 - 류호선
 #   - Helm 차트 수정 부분을 별도의 job 으로 분리하였습니다.
+#   - concurrency 를 job 별로 설정하였습니다.
 name: Build
 
 on:
