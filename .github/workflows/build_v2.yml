@@ -265,3 +265,4 @@ jobs:
         git add .
         git commit -m 'auto: Update Image Version to ${{ needs.build.outputs.tag }}'
         git push origin $TARGET
+        sleep 100
