@@ -259,6 +259,7 @@ jobs:
       env:
         TARGET: ${{ inputs.target }}
       run: |
+        sleep 600
         cd ${{ inputs.helmRepository }}
         git config --global user.name "github-machine-monolith"
         git config --global user.email "github.machine.monolith@gmail.com"
