@@ -86,7 +86,7 @@ jobs:
     #   - dockerTarget 이 존재하는 경우 dockerTarget간 분리
     #   - PRD 환경에서 동시성 1로 제한 + 진행 중인 작업 취소
     concurrency:
-      group: build-image-${{ inputs.env }}${{ inputs.dockerTarget && format('-{0}', inputs.dockerTarget) }}${{ inputs.env != 'prd' && format('-{0}', github.run_id) || '' }}
+      group: build-image/${{ inputs.env }}${{ inputs.dockerTarget && format('/{0}', inputs.dockerTarget) }}${{ inputs.env != 'prd' && format('/{0}', github.run_id) || '' }}
       cancel-in-progress: ${{ inputs.env == 'prd' }}
 
     steps:
@@ -203,7 +203,7 @@ jobs:
     # concurrency
     #   - target간 분리
     concurrency:
-      group: update-tag-${{ inputs.target }}
+      group: update-tag/${{ inputs.target }}
       cancel-in-progress: false
 
     steps:
