@@ -74,7 +74,7 @@ on:
 
 jobs:
   # 1. 도커 이미지를 빌드하고 푸시합니다.
-  build:
+  build-image:
     runs-on: ${{ inputs.runner }}
     outputs:
       tag: ${{ steps.name-tag.outputs.tag }}
@@ -85,7 +85,7 @@ jobs:
     #   - dockerTarget 이 존재하는 경우 dockerTarget간 분리
     #   - PRD 환경에서 동시성 1로 제한 + 진행 중인 작업 취소
     concurrency:
-      group: ${{ github.workflow }}-build-${{ inputs.env }}${{ inputs.dockerTarget && format('-{0}', inputs.dockerTarget) }}${{ inputs.env != 'prd' && format('-{0}', github.run_id) || '' }}
+      group: build-image-${{ inputs.env }}${{ inputs.dockerTarget && format('-{0}', inputs.dockerTarget) }}${{ inputs.env != 'prd' && format('-{0}', github.run_id) || '' }}
       cancel-in-progress: ${{ inputs.env == 'prd' }}
 
     steps:
@@ -196,13 +196,13 @@ jobs:
   # 2. Helm 차트의 이미지를 업데이트하고 커밋합니다.
   update-tag:
     runs-on: ${{ inputs.runner }}
-    needs: build
+    needs: build-image
 
     # 동시성 제어 설정
     # concurrency
     #   - target간 분리
     concurrency:
-      group: ${{ github.workflow }}-update-tag-${{ inputs.target }}
+      group: update-tag-${{ inputs.target }}
       cancel-in-progress: false
 
     steps:
@@ -226,7 +226,7 @@ jobs:
           TARGET=$(jq -r ".$type" updateTargets.json)
           for VALUE_FILE_PATH in $(echo "$TARGET" | jq -r '.valueFilePath[]'); do
             if [ "$VALUE_FILE_PATH" != "null" ]; then
-              CHANGES=$(echo $CHANGES | jq -c ".\"$VALUE_FILE_PATH\".\"${{ inputs.propertyPath }}\" = \"${{ needs.build.outputs.tag }}\"")
+              CHANGES=$(echo $CHANGES | jq -c ".\"$VALUE_FILE_PATH\".\"${{ inputs.propertyPath }}\" = \"${{ needs.build-image.outputs.tag }}\"")
             fi
           done
         done
@@ -264,5 +264,5 @@ jobs:
         git config --global user.name "github-machine-monolith"
         git config --global user.email "github.machine.monolith@gmail.com"
         git add .
-        git commit -m 'auto: Update Image Version to ${{ needs.build.outputs.tag }}'
+        git commit -m 'auto: Update Image Version to ${{ needs.build-image.outputs.tag }}'
         git push origin $TARGET
