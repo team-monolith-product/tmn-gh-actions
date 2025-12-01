@@ -11,6 +11,7 @@
 # v2.5 - 류호선
 #   - Helm 차트 수정 부분을 별도의 job 으로 분리하였습니다.
 #   - concurrency 를 job 별로 설정하였습니다.
+#   - build 단계에서 브랜치의 최신 커밋을 체크아웃하도록 수정하였습니다.
 name: Build
 
 on:
@@ -93,6 +94,7 @@ jobs:
     - name: Checkout
       uses: actions/checkout@v4
       with:
+        ref: ${{ github.ref_name }} # 브랜치의 최신 커밋을 체크아웃합니다.
         submodules: recursive # 서브모듈 초기화
         fetch-depth: 0
 
