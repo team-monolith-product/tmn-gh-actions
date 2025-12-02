@@ -229,7 +229,6 @@ jobs:
         repository: team-monolith-product/${{ inputs.helmRepository }}
         path: ${{ inputs.helmRepository }}
         token: ${{ secrets.MACHINE_TOKEN }}
-        # ★ 각 matrix.target (브랜치)로 체크아웃
         ref: ${{ matrix.target }}
 
     - name: Set changes
