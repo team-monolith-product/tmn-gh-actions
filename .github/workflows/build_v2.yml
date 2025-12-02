@@ -26,7 +26,6 @@ on:
       env:
         required: true
         type: string
-      # Comma joined string, e.g., "dev" or "dev,stage"
       target:
         required: true
         type: string
@@ -205,8 +204,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # comma joined string 을 배열로 변환
-        target: ${{ fromJSON((inputs.target != '' && format('["{0}"]', replace(inputs.target, ',', '","'))) || '[]' ) }}
+        target: ${{ fromJSON(format('["{0}"]', inputs.target)) }}
         include:
           # main을 항상 포함시킵니다
           - target: main
