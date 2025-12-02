@@ -26,6 +26,7 @@ on:
       env:
         required: true
         type: string
+      # Comma joined string, e.g., "dev" or "dev,stage"
       target:
         required: true
         type: string
@@ -201,11 +202,20 @@ jobs:
     runs-on: ${{ inputs.runner }}
     needs: build-image
 
-    # 동시성 제어 설정
-    # concurrency
-    #   - target간 분리
+    strategy:
+      fail-fast: false
+      matrix:
+        # comma joined string 을 배열로 변환
+        target: ${{ fromJSON((inputs.target != '' && format('["{0}"]', replace(inputs.target, ',', '","'))) || '[]' ) }}
+        include:
+          # main을 항상 포함시킵니다
+          - target: main
+            # 의미 없는 더미 key (matrix 에서 중복 방지용)
+            dummy: value
+
+    # target 별로 동시성 분리
     concurrency:
-      group: update-tag/${{ inputs.target }}
+      group: update-tag/${{ matrix.target }}
       cancel-in-progress: false
 
     steps:
@@ -219,7 +229,8 @@ jobs:
         repository: team-monolith-product/${{ inputs.helmRepository }}
         path: ${{ inputs.helmRepository }}
         token: ${{ secrets.MACHINE_TOKEN }}
-        ref: ${{ inputs.target }}
+        # ★ 각 matrix.target (브랜치)로 체크아웃
+        ref: ${{ matrix.target }}
 
     - name: Set changes
       id: changes
@@ -260,7 +271,7 @@ jobs:
 
     - name: Commit and Push
       env:
-        TARGET: ${{ inputs.target }}
+        TARGET: ${{ matrix.target }}
       run: |
         cd ${{ inputs.helmRepository }}
         git config --global user.name "github-machine-monolith"
