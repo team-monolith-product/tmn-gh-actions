@@ -12,6 +12,9 @@
 #   - Helm 차트 수정 부분을 별도의 job 으로 분리하였습니다.
 #   - concurrency 를 job 별로 설정하였습니다.
 #   - build 단계에서 브랜치의 최신 커밋을 체크아웃하도록 수정하였습니다.
+# v2.6 - 류호선
+#   - update-tag job을 matrix로 처리
+#   - matrix에 main이 없는 경우 main을 추가
 name: Build
 
 on:
