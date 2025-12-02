@@ -204,7 +204,8 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        target: ${{ fromJSON(format('["{0}"]', inputs.target)) }}
+        target:
+          - ${{ inputs.target }}
         include:
           # main을 항상 포함시킵니다
           - target: main
