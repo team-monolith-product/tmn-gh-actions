@@ -209,7 +209,7 @@ jobs:
           # main을 항상 포함시킵니다
           - target: main
             # 의미 없는 더미 key (matrix 에서 중복 방지용)
-            dummy: value
+            dummy: _
 
     # target 별로 동시성 분리
     concurrency:
