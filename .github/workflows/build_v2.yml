@@ -207,7 +207,7 @@ jobs:
         target: ${{ fromJSON(format('["{0}"]', inputs.target)) }}
         include:
           # main을 항상 포함시킵니다
-          - target: develop
+          - target: main
             # 의미 없는 더미 key (matrix 에서 중복 방지용)
             dummy: _
 
