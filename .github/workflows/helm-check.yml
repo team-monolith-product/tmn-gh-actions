@@ -25,41 +25,42 @@ jobs:
         id: find_charts
         run: |
           found_charts=$(find ${{ inputs.charts_directory }} -name "Chart.yaml" -not -path "*/charts/*" -print0 | xargs -0 -n1 dirname)
-          
           custom_charts=""
           for chart in $found_charts; do
             if [ -d "$chart/templates" ] && [ "$(ls -A $chart/templates)" ]; then
               custom_charts="$custom_charts $chart"
-            else
-              echo "Skipping parent/wrapper chart: $chart"
             fi
           done
-          
           final_list=$(echo "$custom_charts" | xargs | tr '\n' ' ')
-          
-          echo "Target Custom Charts: $final_list"
           echo "charts=$final_list" >> "$GITHUB_OUTPUT"
 
       - name: Run Helm Dependency Build
         run: |
           for chart_path in ${{ steps.find_charts.outputs.charts }}; do
-            echo "::group::Building dependencies for: $chart_path"
             helm dependency build "$chart_path"
-            echo "::endgroup::"
           done
 
       - name: Run Helm Lint
         run: |
+          set -o pipefail
           for chart_path in ${{ steps.find_charts.outputs.charts }}; do
             echo "::group::Linting chart: $chart_path"
-            helm lint "$chart_path"
+            helm lint "$chart_path" | grep -v "icon is recommended"
             echo "::endgroup::"
           done
 
       - name: Run Helm Template
         run: |
           for chart_path in ${{ steps.find_charts.outputs.charts }}; do
-            echo "::group::Templating chart: $chart_path"
+            echo "::group::Templating chart: $chart_path (Default)"
             helm template "$chart_path" "$chart_path" --debug --dry-run
             echo "::endgroup::"
+
+            extra_values=$(find "$chart_path" -maxdepth 1 -name "*.yaml" ! -name "Chart.yaml" ! -name "values.yaml" ! -name "Chart.lock")
+            
+            for value_file in $extra_values; do
+              echo "::group::Templating chart: $chart_path with $value_file"
+              helm template "$chart_path" "$chart_path" -f "$value_file" --debug --dry-run
+              echo "::endgroup::"
+            done
           done
