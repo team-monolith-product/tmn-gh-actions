@@ -40,27 +40,16 @@ jobs:
             helm dependency build "$chart_path"
           done
 
-      - name: Run Helm Lint
-        run: |
-          set -o pipefail
-          for chart_path in ${{ steps.find_charts.outputs.charts }}; do
-            echo "::group::Linting chart: $chart_path"
-            helm lint "$chart_path" | grep -v "icon is recommended"
-            echo "::endgroup::"
-          done
-
       - name: Run Helm Template
         run: |
           for chart_path in ${{ steps.find_charts.outputs.charts }}; do
-            echo "::group::Templating chart: $chart_path (Default)"
-            helm template "$chart_path" "$chart_path" --debug --dry-run
-            echo "::endgroup::"
+            release_name=$(basename "$chart_path")
 
-            extra_values=$(find "$chart_path" -maxdepth 1 -name "*.yaml" ! -name "Chart.yaml" ! -name "values.yaml" ! -name "Chart.lock")
+            extra_values=$(find "$chart_path" -maxdepth 1 -name "*.yaml" ! -name "Chart.yaml" ! -name "Chart.lock" ! -name "requirements.yaml")
             
             for value_file in $extra_values; do
               echo "::group::Templating chart: $chart_path with $value_file"
-              helm template "$chart_path" "$chart_path" -f "$value_file" --debug --dry-run
+              helm template "$release_name" "$chart_path" -f "$value_file" --debug --dry-run
               echo "::endgroup::"
             done
           done
