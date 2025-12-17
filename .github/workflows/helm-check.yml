@@ -24,8 +24,7 @@ jobs:
       - name: Find Helm Charts
         id: find_charts
         run: |
-          charts=$(find ${{ inputs.charts_directory }} -name "Chart.yaml" -print0 | xargs -0 -n1 dirname)
-          echo "Found charts: $charts"
+          charts=$(find ${{ inputs.charts_directory }} -name "Chart.yaml" -print0 | xargs -0 -n1 dirname | tr '\n' ' ')
           echo "charts=$charts" >> "$GITHUB_OUTPUT"
 
       - name: Run Helm Lint
@@ -35,7 +34,6 @@ jobs:
             helm lint "$chart_path"
             echo "::endgroup::"
           done
-        if: success() && steps.find_charts.outputs.charts != ''
 
       - name: Run Helm Template
         run: |
@@ -44,4 +42,3 @@ jobs:
             helm template "$chart_path" "$chart_path" --debug --dry-run
             echo "::endgroup::"
           done
-        if: success() && steps.find_charts.outputs.charts != ''
