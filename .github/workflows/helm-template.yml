@@ -67,21 +67,19 @@ jobs:
 
           if [ ${#failed_templates[@]} -gt 0 ]; then
             echo ""
-            echo "::error::=========================================="
-            echo "::error::Failed to template ${#failed_templates[@]} chart(s):"
-            echo "::error::=========================================="
+            echo "=========================================="
+            echo "::error::Failed to template ${#failed_templates[@]} chart(s)"
+            echo "=========================================="
             for failed in "${failed_templates[@]}"; do
               IFS='|' read -r chart_path value_file err_idx <<< "$failed"
-              echo "::error::"
-              echo "::error::Chart: $chart_path"
-              echo "::error::Values: $value_file"
-              echo "::error::Error:"
+              echo ""
+              echo "::error::Chart: $chart_path with $value_file"
               while IFS= read -r line; do
-                echo "::error::  $line"
+                echo "$line"
               done < "$error_log_dir/error_$err_idx.log"
-              echo "::error::----------------------------------------"
+              echo "----------------------------------------"
             done
-            echo "::error::=========================================="
+            echo "=========================================="
             exit 1
           fi
 
