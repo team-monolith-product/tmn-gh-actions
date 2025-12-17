@@ -55,9 +55,7 @@ jobs:
             for value_file in $extra_values; do
               if ! helm template "$release_name" "$chart_path" -f "$value_file" --dry-run > /dev/null 2> "$error_log_dir/error_$error_count.log"; then
                 echo "::error::Failed to template $chart_path with $value_file"
-                echo "::group::Error details for $chart_path with $value_file"
                 cat "$error_log_dir/error_$error_count.log"
-                echo "::endgroup::"
                 failed_templates+=("$chart_path|$value_file|$error_count")
                 ((error_count++))
               else
