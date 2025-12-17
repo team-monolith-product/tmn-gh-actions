@@ -45,7 +45,7 @@ jobs:
           for chart_path in ${{ steps.find_charts.outputs.charts }}; do
             release_name=$(basename "$chart_path")
 
-            extra_values=$(find "$chart_path" -maxdepth 1 -name "*.yaml" ! -name "Chart.yaml" ! -name "Chart.lock" ! -name "requirements.yaml")
+            extra_values=$(find "$chart_path" -maxdepth 1 -name "*.yaml" ! -name "Chart.yaml")
             
             for value_file in $extra_values; do
               echo "::group::Templating chart: $chart_path with $value_file"
