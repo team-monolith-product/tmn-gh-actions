@@ -42,6 +42,7 @@ jobs:
 
       - name: Run Helm Template
         run: |
+          set +e
           failed_templates=()
           error_log_dir="/tmp/helm_errors"
           mkdir -p "$error_log_dir"
