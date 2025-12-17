@@ -27,6 +27,14 @@ jobs:
           charts=$(find ${{ inputs.charts_directory }} -name "Chart.yaml" -print0 | xargs -0 -n1 dirname | tr '\n' ' ')
           echo "charts=$charts" >> "$GITHUB_OUTPUT"
 
+      - name: Run Helm Dependency Build
+        run: |
+          for chart_path in ${{ steps.find_charts.outputs.charts }}; do
+            echo "::group::Building dependencies for: $chart_path"
+            helm dependency build "$chart_path"
+            echo "::endgroup::"
+          done
+
       - name: Run Helm Lint
         run: |
           for chart_path in ${{ steps.find_charts.outputs.charts }}; do
