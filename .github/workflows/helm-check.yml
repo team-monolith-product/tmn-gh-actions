@@ -21,11 +21,24 @@ jobs:
         with:
           version: v3.14.0
 
-      - name: Find Helm Charts
+      - name: Find Custom Helm Charts
         id: find_charts
         run: |
-          charts=$(find ${{ inputs.charts_directory }} -name "Chart.yaml" -print0 | xargs -0 -n1 dirname | tr '\n' ' ')
-          echo "charts=$charts" >> "$GITHUB_OUTPUT"
+          found_charts=$(find ${{ inputs.charts_directory }} -name "Chart.yaml" -not -path "*/charts/*" -print0 | xargs -0 -n1 dirname)
+          
+          custom_charts=""
+          for chart in $found_charts; do
+            if [ -d "$chart/templates" ] && [ "$(ls -A $chart/templates)" ]; then
+              custom_charts="$custom_charts $chart"
+            else
+              echo "Skipping parent/wrapper chart: $chart"
+            fi
+          done
+          
+          final_list=$(echo "$custom_charts" | xargs | tr '\n' ' ')
+          
+          echo "Target Custom Charts: $final_list"
+          echo "charts=$final_list" >> "$GITHUB_OUTPUT"
 
       - name: Run Helm Dependency Build
         run: |
