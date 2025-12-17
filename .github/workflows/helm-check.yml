@@ -1,0 +1,47 @@
+name: Helm Chart Lint and Template
+
+on:
+  workflow_call:
+    inputs:
+      charts_directory:
+        description: 'The directory to search for Helm charts'
+        required: false
+        default: '.'
+        type: string
+
+jobs:
+  lint-and-template:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Setup Helm
+        uses: azure/setup-helm@v1.2
+        with:
+          version: v3.14.0
+
+      - name: Find Helm Charts
+        id: find_charts
+        run: |
+          charts=$(find ${{ inputs.charts_directory }} -name "Chart.yaml" -print0 | xargs -0 -n1 dirname)
+          echo "Found charts: $charts"
+          echo "charts=$charts" >> "$GITHUB_OUTPUT"
+
+      - name: Run Helm Lint
+        run: |
+          for chart_path in ${{ steps.find_charts.outputs.charts }}; do
+            echo "::group::Linting chart: $chart_path"
+            helm lint "$chart_path"
+            echo "::endgroup::"
+          done
+        if: success() && steps.find_charts.outputs.charts != ''
+
+      - name: Run Helm Template
+        run: |
+          for chart_path in ${{ steps.find_charts.outputs.charts }}; do
+            echo "::group::Templating chart: $chart_path"
+            helm template "$chart_path" "$chart_path" --debug --dry-run
+            echo "::endgroup::"
+          done
+        if: success() && steps.find_charts.outputs.charts != ''
