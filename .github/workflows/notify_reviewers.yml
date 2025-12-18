@@ -3,7 +3,7 @@
 #   - 모든 check 완료 확인
 #   - re-request 시 알림 재전송
 #   - concurrency 설정 (브랜치별 그룹, cancel-in-progress 활성화)
-name: Review Alarm
+name: Notify Reviewers
 
 on:
   workflow_call:
@@ -33,7 +33,7 @@ on:
       - ready_for_review        # Draft에서 Ready로 변경 시 (옵션)
 
 jobs:
-  send-review-alarm:
+  notify-reviewers:
     runs-on: ubuntu-22.04
 
     # 동시성 제어 설정
@@ -41,7 +41,7 @@ jobs:
     #   - 브랜치별로 그룹화
     #   - 진행 중인 작업 취소
     concurrency:
-      group: review-alarm/${{ github.event.pull_request.head.ref }}
+      group: notify-reviewers/${{ github.event.pull_request.head.ref }}
       cancel-in-progress: true
 
     steps:
@@ -60,7 +60,7 @@ jobs:
       with:
         github-token: ${{ secrets.GITHUB_TOKEN || github.token }}
         script: |
-          const script = require('./.github/scripts/review_alarm/wait-for-checks.js')
+          const script = require('./.github/scripts/notify_reviewers/wait-for-checks.js')
           await script({github, context, core})
 
     - name: Get reviewers
@@ -69,7 +69,7 @@ jobs:
       with:
         github-token: ${{ secrets.GITHUB_TOKEN || github.token }}
         script: |
-          const script = require('./.github/scripts/review_alarm/get-reviewers.js')
+          const script = require('./.github/scripts/notify_reviewers/get-reviewers.js')
           await script({github, context, core})
 
     - name: Send Slack notification
@@ -129,5 +129,5 @@ jobs:
       with:
         github-token: ${{ secrets.GITHUB_TOKEN || github.token }}
         script: |
-          const script = require('./.github/scripts/review_alarm/comment-on-pr.js')
+          const script = require('./.github/scripts/notify_reviewers/comment-on-pr.js')
           await script({github, context, core})
