@@ -49,7 +49,10 @@ jobs:
           error_count=0
 
           for chart_path in ${{ steps.find_charts.outputs.charts }}; do
-            release_name=$(basename "$chart_path")
+            release_name=$(grep '^name:' "$chart_path/Chart.yaml" | awk '{print $2}' | tr -d '"' | tr -d "'")
+            if [ -z "$release_name" ]; then
+              release_name=$(basename "$chart_path")
+            fi
 
             extra_values=$(find "$chart_path" -maxdepth 1 -name "*.yaml" ! -name "Chart.yaml")
 
