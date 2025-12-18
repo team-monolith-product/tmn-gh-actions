@@ -8,11 +8,6 @@ name: Notify Reviewers
 on:
   workflow_call:
     inputs:
-      # Slack 알림 관련
-      slackWebhookUrl:
-        required: false
-        type: string
-        description: Slack webhook URL for sending notifications
       # 체크해야 할 check 리스트
       requiredChecks:
         required: false
@@ -76,7 +71,7 @@ jobs:
       if: ${{ steps.get-reviewers.outputs.has_reviewers == 'true' }}
       uses: slackapi/slack-github-action@v1
       env:
-        SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL || inputs.slackWebhookUrl }}
+        SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
         SLACK_WEBHOOK_TYPE: INCOMING_WEBHOOK
       with:
         payload: |
