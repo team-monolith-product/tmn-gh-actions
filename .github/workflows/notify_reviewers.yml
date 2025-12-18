@@ -21,12 +21,6 @@ on:
       SLACK_WEBHOOK_URL:
         required: true
 
-  pull_request:
-    types:
-      - review_requested        # 리뷰어 지정 시
-      - review_request_removed  # 리뷰어 제거 시 (옵션)
-      - ready_for_review        # Draft에서 Ready로 변경 시 (옵션)
-
 jobs:
   notify-reviewers:
     runs-on: ubuntu-22.04
