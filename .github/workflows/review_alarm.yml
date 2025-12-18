@@ -1,0 +1,133 @@
+# v1.0 - 류호선
+#   - 리뷰어 지정 시 알림 전송
+#   - 모든 check 완료 확인
+#   - re-request 시 알림 재전송
+#   - concurrency 설정 (브랜치별 그룹, cancel-in-progress 활성화)
+name: Review Alarm
+
+on:
+  workflow_call:
+    inputs:
+      # Slack 알림 관련
+      slackWebhookUrl:
+        required: false
+        type: string
+        description: Slack webhook URL for sending notifications
+      # 체크해야 할 check 리스트
+      requiredChecks:
+        required: false
+        type: string
+        description: 'JSON array of required check names. Example: ["build", "test", "lint"]'
+        default: '[]'
+
+    secrets:
+      GITHUB_TOKEN:
+        required: true
+      SLACK_WEBHOOK_URL:
+        required: true
+
+  pull_request:
+    types:
+      - review_requested        # 리뷰어 지정 시
+      - review_request_removed  # 리뷰어 제거 시 (옵션)
+      - ready_for_review        # Draft에서 Ready로 변경 시 (옵션)
+
+jobs:
+  send-review-alarm:
+    runs-on: ubuntu-22.04
+
+    # 동시성 제어 설정
+    # concurrency
+    #   - 브랜치별로 그룹화
+    #   - 진행 중인 작업 취소
+    concurrency:
+      group: review-alarm/${{ github.event.pull_request.head.ref }}
+      cancel-in-progress: true
+
+    steps:
+    - name: Parse required checks
+      id: parse-checks
+      run: |
+        CHECKS='${{ inputs.requiredChecks }}'
+        echo "checks=$CHECKS" >> $GITHUB_OUTPUT
+        echo "check_count=$(echo $CHECKS | jq '. | length')" >> $GITHUB_OUTPUT
+
+    - name: Wait for required checks
+      if: ${{ fromJSON(steps.parse-checks.outputs.check_count) > 0 }}
+      uses: actions/github-script@v7
+      env:
+        REQUIRED_CHECKS: ${{ steps.parse-checks.outputs.checks }}
+      with:
+        github-token: ${{ secrets.GITHUB_TOKEN || github.token }}
+        script: |
+          const script = require('./.github/scripts/review_alarm/wait-for-checks.js')
+          await script({github, context, core})
+
+    - name: Get reviewers
+      id: get-reviewers
+      uses: actions/github-script@v7
+      with:
+        github-token: ${{ secrets.GITHUB_TOKEN || github.token }}
+        script: |
+          const script = require('./.github/scripts/review_alarm/get-reviewers.js')
+          await script({github, context, core})
+
+    - name: Send Slack notification
+      if: ${{ steps.get-reviewers.outputs.has_reviewers == 'true' }}
+      uses: slackapi/slack-github-action@v1
+      env:
+        SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL || inputs.slackWebhookUrl }}
+        SLACK_WEBHOOK_TYPE: INCOMING_WEBHOOK
+      with:
+        payload: |
+          {
+            "text": "PR Review Request",
+            "blocks": [
+              {
+                "type": "header",
+                "text": {
+                  "type": "plain_text",
+                  "text": "📝 PR Review Requested"
+                }
+              },
+              {
+                "type": "section",
+                "fields": [
+                  {
+                    "type": "mrkdwn",
+                    "text": "*PR Title:*\n${{ github.event.pull_request.title }}"
+                  },
+                  {
+                    "type": "mrkdwn",
+                    "text": "*Author:*\n${{ github.event.pull_request.user.login }}"
+                  },
+                  {
+                    "type": "mrkdwn",
+                    "text": "*Reviewers:*\n${{ steps.get-reviewers.outputs.reviewers }}"
+                  },
+                  {
+                    "type": "mrkdwn",
+                    "text": "*Branch:*\n${{ github.event.pull_request.head.ref }}"
+                  }
+                ]
+              },
+              {
+                "type": "section",
+                "text": {
+                  "type": "mrkdwn",
+                  "text": "<${{ github.event.pull_request.html_url }}|View Pull Request>"
+                }
+              }
+            ]
+          }
+
+    - name: Comment on PR
+      if: ${{ steps.get-reviewers.outputs.has_reviewers == 'true' }}
+      uses: actions/github-script@v7
+      env:
+        REVIEWERS: ${{ steps.get-reviewers.outputs.reviewers }}
+      with:
+        github-token: ${{ secrets.GITHUB_TOKEN || github.token }}
+        script: |
+          const script = require('./.github/scripts/review_alarm/comment-on-pr.js')
+          await script({github, context, core})
