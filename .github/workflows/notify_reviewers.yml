@@ -18,7 +18,7 @@ on:
     secrets:
       GITHUB_TOKEN:
         required: true
-      SLACK_WEBHOOK_URL:
+      SLACK_BOT_TOKEN:
         required: true
 
 jobs:
@@ -65,9 +65,9 @@ jobs:
       if: ${{ steps.get-reviewers.outputs.has_reviewers == 'true' }}
       uses: slackapi/slack-github-action@v1
       env:
-        SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
-        SLACK_WEBHOOK_TYPE: INCOMING_WEBHOOK
+        SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
       with:
+        channel-id: 'C086HAVUFR8'
         payload: |
           {
             "text": "PR Review Request",
