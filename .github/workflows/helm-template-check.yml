@@ -95,14 +95,13 @@ jobs:
             # Find all environment-specific values files
             VALUES_FILES=$(find . -maxdepth 1 -name "*.yaml" $EXCLUDE_ARGS 2>/dev/null || true)
 
-              # Template with each values file
-              for values_file in $VALUES_FILES; do
-                filename=$(basename "$values_file")
-                echo "Templating with $filename..."
-                helm template . -f "$values_file" > /dev/null
-                echo "✓ Successfully templated with $filename"
-              done
-            fi
+            # Template with each values file
+            for values_file in $VALUES_FILES; do
+              filename=$(basename "$values_file")
+              echo "Templating with $filename..."
+              helm template . -f "$values_file" > /dev/null
+              echo "✓ Successfully templated with $filename"
+            done
 
             # Return to original directory
             popd > /dev/null
