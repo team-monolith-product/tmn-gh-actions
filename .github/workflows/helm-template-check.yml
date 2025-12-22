@@ -1,4 +1,4 @@
-name: Helm Template Check (Reusable)
+name: Helm Template Check
 
 on:
   workflow_call:
