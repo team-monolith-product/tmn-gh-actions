@@ -60,6 +60,17 @@ jobs:
           done
           echo ""
 
+          # Add helm repositories from all charts
+          echo "Collecting helm repositories..."
+          for chart_path in "${ALL_CHARTS[@]}"; do
+            grep 'repository:' "$chart_path/Chart.yaml" 2>/dev/null | sed 's/.*repository: *//' | grep -E '^https?://'
+          done | sort -u | while read repo_url; do
+            repo_name=$(echo "$repo_url" | sed 's|https\?://||' | sed 's|[/.]|-|g')
+            helm repo add "$repo_name" "$repo_url"
+          done || true
+          helm repo update || true
+          echo ""
+
           # Build exclude pattern for find command
           EXCLUDE_ARGS=""
           for pattern in $EXCLUDE_VALUES_PATTERNS; do
@@ -74,14 +85,6 @@ jobs:
 
             # Change to chart directory
             pushd "$chart_path" > /dev/null
-
-            # Add helm repositories from dependencies
-            REPO_URLS=$(grep 'repository:' Chart.yaml | sed 's/.*repository: *//' | grep -E '^https?://' | sort -u || true)
-            for repo_url in $REPO_URLS; do
-              repo_name=$(echo "$repo_url" | sed 's|https\?://||' | sed 's|[/.]|-|g')
-              helm repo add "$repo_name" "$repo_url"
-            done
-            [ -n "$REPO_URLS" ] && helm repo update || true
 
             # Build dependencies
             echo "Building dependencies..."
