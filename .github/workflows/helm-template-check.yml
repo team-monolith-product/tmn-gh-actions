@@ -1,0 +1,111 @@
+name: Helm Template Check
+
+on:
+  workflow_call:
+    inputs:
+      chart-patterns:
+        description: 'JSON array of glob patterns to find Chart.yaml files (e.g., ["*/Chart.yaml"] or ["aws/charts/*/Chart.yaml"])'
+        required: true
+        type: string
+      exclude-values-patterns:
+        description: 'Space-separated patterns to exclude from values files'
+        required: false
+        type: string
+        default: 'Chart.yaml values.yaml'
+
+jobs:
+  helm-template:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Helm
+        uses: azure/setup-helm@v4
+
+      - name: Run Helm template check
+        env:
+          CHART_PATTERNS: ${{ inputs.chart-patterns }}
+          EXCLUDE_VALUES_PATTERNS: ${{ inputs.exclude-values-patterns }}
+        run: |
+          set -e
+
+          echo "Configuration:"
+          echo "  Chart patterns: $CHART_PATTERNS"
+          echo "  Exclude values patterns: $EXCLUDE_VALUES_PATTERNS"
+          echo ""
+
+          # Parse chart patterns from JSON array
+          PATTERNS=$(echo "$CHART_PATTERNS" | jq -r '.[]')
+
+          # Find all charts matching the patterns
+          ALL_CHARTS=()
+          for pattern in $PATTERNS; do
+            # Extract directory path from pattern
+            base_pattern="${pattern%/Chart.yaml}"
+
+            if [ "$base_pattern" = "./Chart.yaml" ]; then
+              ALL_CHARTS+=(".")
+            else
+              mapfile -t charts < <(find . -path "./$pattern" -type f -exec dirname {} \;)
+              ALL_CHARTS+=("${charts[@]}")
+            fi
+          done
+
+          echo "Found ${#ALL_CHARTS[@]} chart(s):"
+          for chart in "${ALL_CHARTS[@]}"; do
+            echo "  - $chart"
+          done
+          echo ""
+
+          # Add helm repositories from all charts
+          echo "Collecting helm repositories..."
+          for chart_path in "${ALL_CHARTS[@]}"; do
+            grep 'repository:' "$chart_path/Chart.yaml" 2>/dev/null | sed 's/.*repository: *//' | grep -E '^https?://'
+          done | sort -u | while read repo_url; do
+            repo_name=$(echo "$repo_url" | sed 's|https\?://||' | sed 's|[/.]|-|g')
+            helm repo add "$repo_name" "$repo_url"
+          done || true
+          helm repo update || true
+          echo ""
+
+          # Build exclude pattern for find command
+          EXCLUDE_ARGS=""
+          for pattern in $EXCLUDE_VALUES_PATTERNS; do
+            EXCLUDE_ARGS="$EXCLUDE_ARGS -not -name $pattern"
+          done
+
+          # Process each chart
+          CHARTS_PROCESSED=0
+          for chart_path in "${ALL_CHARTS[@]}"; do
+            echo "::group::Processing chart: $chart_path"
+            CHARTS_PROCESSED=$((CHARTS_PROCESSED + 1))
+
+            # Change to chart directory
+            pushd "$chart_path" > /dev/null
+
+            # Build dependencies
+            echo "Building dependencies..."
+            helm dependency build .
+
+            # Find all environment-specific values files
+            VALUES_FILES=$(find . -maxdepth 1 -name "*.yaml" $EXCLUDE_ARGS 2>/dev/null || true)
+
+            # Template with each values file
+            for values_file in $VALUES_FILES; do
+              filename=$(basename "$values_file")
+              echo "Templating with $filename..."
+              helm template . -f "$values_file" > /dev/null
+              echo "✓ Successfully templated with $filename"
+            done
+
+            # Return to original directory
+            popd > /dev/null
+
+            echo "::endgroup::"
+            echo ""
+          done
+
+          echo "All charts templated successfully! ($CHARTS_PROCESSED chart(s) processed)"
