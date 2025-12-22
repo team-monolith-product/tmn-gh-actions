@@ -11,7 +11,7 @@ on:
         description: 'Space-separated patterns to exclude from values files'
         required: false
         type: string
-        default: 'Chart.yaml'
+        default: 'Chart.yaml values.yaml'
 
 jobs:
   helm-template:
