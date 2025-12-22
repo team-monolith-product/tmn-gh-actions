@@ -46,26 +46,13 @@ jobs:
             # Extract directory path from pattern
             base_pattern="${pattern%/Chart.yaml}"
 
-            if [ "$base_pattern" = "." ] || [ "$base_pattern" = "./Chart.yaml" ]; then
-              # Root directory itself is a chart
-              if [ -f "Chart.yaml" ]; then
-                ALL_CHARTS+=(".")
-              fi
+            if [ "$base_pattern" = "./Chart.yaml" ]; then
+              ALL_CHARTS+=(".")
             else
-              # Find all Chart.yaml files matching the pattern
-              while IFS= read -r chart_file; do
-                if [ -n "$chart_file" ]; then
-                  chart_dir=$(dirname "$chart_file")
-                  ALL_CHARTS+=("$chart_dir")
-                fi
-              done < <(find . -path "./$pattern" -type f 2>/dev/null || true)
+              mapfile -t charts < <(find . -path "./$pattern" -type f -exec dirname {} \;)
+              ALL_CHARTS+=("${charts[@]}")
             fi
           done
-
-          if [ ${#ALL_CHARTS[@]} -eq 0 ]; then
-            echo "No charts found matching the specified patterns"
-            exit 0
-          fi
 
           echo "Found ${#ALL_CHARTS[@]} chart(s):"
           for chart in "${ALL_CHARTS[@]}"; do
@@ -87,6 +74,14 @@ jobs:
 
             # Change to chart directory
             pushd "$chart_path" > /dev/null
+
+            # Add helm repositories from dependencies
+            REPO_URLS=$(grep 'repository:' Chart.yaml | sed 's/.*repository: *//' | grep -E '^https?://' | sort -u || true)
+            for repo_url in $REPO_URLS; do
+              repo_name=$(echo "$repo_url" | sed 's|https\?://||' | sed 's|[/.]|-|g')
+              helm repo add "$repo_name" "$repo_url"
+            done
+            [ -n "$REPO_URLS" ] && helm repo update || true
 
             # Build dependencies
             echo "Building dependencies..."
