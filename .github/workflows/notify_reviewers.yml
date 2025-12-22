@@ -3,6 +3,7 @@
 #   - 모든 check 완료 확인
 #   - re-request 시 알림 재전송
 #   - concurrency 설정 (브랜치별 그룹, cancel-in-progress 활성화)
+#   - workflow_run 이벤트 지원
 name: Notify Reviewers
 
 on:
@@ -25,15 +26,43 @@ jobs:
   notify-reviewers:
     runs-on: ubuntu-22.04
 
-    # 동시성 제어 설정
-    # concurrency
-    #   - 브랜치별로 그룹화
-    #   - 진행 중인 작업 취소
     concurrency:
-      group: notify-reviewers/${{ github.event.pull_request.head.ref }}
+      group: notify-reviewers/${{ github.ref }}
       cancel-in-progress: true
 
     steps:
+    - name: Checkout tmn-gh-actions
+      uses: actions/checkout@v4
+      with:
+        repository: team-monolith-product/tmn-gh-actions
+        token: ${{ secrets.GITHUB_TOKEN }}
+
+    - name: Get PR info (workflow_run only)
+      id: pr-info
+      if: github.event_name == 'workflow_run'
+      uses: actions/github-script@v7
+      with:
+        github-token: ${{ secrets.GITHUB_TOKEN || github.token }}
+        script: |
+          const prs = context.payload.workflow_run.pull_requests;
+          if (!prs || prs.length === 0) {
+            core.setFailed('No PR associated with this workflow_run');
+            return;
+          }
+          // workflow_run의 pull_requests는 간략한 정보만 있으므로 상세 정보 조회
+          const { data: pr } = await github.rest.pulls.get({
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            pull_number: prs[0].number,
+          });
+
+          core.setOutput('number', pr.number);
+          core.setOutput('title', pr.title);
+          core.setOutput('author', pr.user.login);
+          core.setOutput('branch', pr.head.ref);
+          core.setOutput('sha', pr.head.sha);
+          core.setOutput('url', pr.html_url);
+
     - name: Parse required checks
       id: parse-checks
       run: |
@@ -41,20 +70,23 @@ jobs:
         echo "checks=$CHECKS" >> $GITHUB_OUTPUT
         echo "check_count=$(echo $CHECKS | jq '. | length')" >> $GITHUB_OUTPUT
 
-    - name: Wait for required checks
+    - name: Verify required checks
       if: ${{ fromJSON(steps.parse-checks.outputs.check_count) > 0 }}
       uses: actions/github-script@v7
       env:
         REQUIRED_CHECKS: ${{ steps.parse-checks.outputs.checks }}
+        PR_SHA: ${{ github.event.pull_request.head.sha || steps.pr-info.outputs.sha }}
       with:
         github-token: ${{ secrets.GITHUB_TOKEN || github.token }}
         script: |
-          const script = require('./.github/scripts/notify_reviewers/wait-for-checks.js')
+          const script = require('./.github/scripts/notify_reviewers/verify-checks.js')
           await script({github, context, core})
 
     - name: Get reviewers
       id: get-reviewers
       uses: actions/github-script@v7
+      env:
+        PR_NUMBER: ${{ github.event.pull_request.number || steps.pr-info.outputs.number }}
       with:
         github-token: ${{ secrets.GITHUB_TOKEN || github.token }}
         script: |
@@ -84,11 +116,11 @@ jobs:
                 "fields": [
                   {
                     "type": "mrkdwn",
-                    "text": "*PR Title:*\n${{ github.event.pull_request.title }}"
+                    "text": "*PR Title:*\n${{ github.event.pull_request.title || steps.pr-info.outputs.title }}"
                   },
                   {
                     "type": "mrkdwn",
-                    "text": "*Author:*\n${{ github.event.pull_request.user.login }}"
+                    "text": "*Author:*\n${{ github.event.pull_request.user.login || steps.pr-info.outputs.author }}"
                   },
                   {
                     "type": "mrkdwn",
@@ -96,7 +128,7 @@ jobs:
                   },
                   {
                     "type": "mrkdwn",
-                    "text": "*Branch:*\n${{ github.event.pull_request.head.ref }}"
+                    "text": "*Branch:*\n${{ github.event.pull_request.head.ref || steps.pr-info.outputs.branch }}"
                   }
                 ]
               },
@@ -104,7 +136,7 @@ jobs:
                 "type": "section",
                 "text": {
                   "type": "mrkdwn",
-                  "text": "<${{ github.event.pull_request.html_url }}|View Pull Request>"
+                  "text": "<${{ github.event.pull_request.html_url || steps.pr-info.outputs.url }}|View Pull Request>"
                 }
               }
             ]
