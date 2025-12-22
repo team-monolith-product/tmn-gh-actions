@@ -22,6 +22,22 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: Set up Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: '20'
+
+      - name: Install Prettier
+        run: npm install --global prettier
+
+      - name: Run Prettier format
+        run: prettier --write .
+
+      - name: Commit Prettier changes
+        uses: stefanzweifel/git-auto-commit-action@v5
+        with:
+          commit_message: 'style: apply Prettier formatting'
+
       - name: Set up Helm
         uses: azure/setup-helm@v4
 
