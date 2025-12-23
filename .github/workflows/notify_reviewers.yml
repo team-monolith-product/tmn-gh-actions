@@ -36,6 +36,7 @@ jobs:
       with:
         repository: team-monolith-product/tmn-gh-actions
         token: ${{ secrets.MACHINE_TOKEN }}
+        path: tmn-gh-actions
 
     - name: Get PR info (workflow_run only)
       id: pr-info
@@ -77,7 +78,7 @@ jobs:
       with:
         github-token: ${{ secrets.MACHINE_TOKEN }}
         script: |
-          const script = require('./.github/scripts/notify_reviewers/verify-checks.js')
+          const script = require('./tmn-gh-actions/.github/scripts/notify_reviewers/verify-checks.js')
           await script({github, context, core})
 
     - name: Get reviewers
@@ -88,7 +89,7 @@ jobs:
       with:
         github-token: ${{ secrets.MACHINE_TOKEN }}
         script: |
-          const script = require('./.github/scripts/notify_reviewers/get-reviewers.js')
+          const script = require('./tmn-gh-actions/.github/scripts/notify_reviewers/get-reviewers.js')
           await script({github, context, core})
 
     - name: Send Slack notification
