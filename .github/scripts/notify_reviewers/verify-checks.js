@@ -1,10 +1,14 @@
+const fs = require('fs');
+
 /**
  * Verify required GitHub checks have passed
  * - If any check has failed, abort immediately
  * - If any check is still running, skip (will be triggered again by workflow_run)
  *
+ * Files:
+ * - required_checks.json: JSON array of check names to verify
+ *
  * Environment variables:
- * - REQUIRED_CHECKS: JSON array of check names to verify
  * - PR_SHA: The commit SHA to check
  *
  * @param {object} github - GitHub API client
@@ -12,7 +16,7 @@
  * @param {object} core - GitHub Actions core utilities
  */
 module.exports = async ({ github, context, core }) => {
-  const requiredChecks = JSON.parse(process.env.REQUIRED_CHECKS);
+  const requiredChecks = JSON.parse(fs.readFileSync('required_checks.json', 'utf8'));
   const prSha = process.env.PR_SHA;
 
   if (requiredChecks.length === 0) {
