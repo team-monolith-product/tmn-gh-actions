@@ -27,16 +27,21 @@ jobs:
         with:
           node-version: '20'
 
-      - name: Install Prettier
-        run: npm install --global prettier
+      - name: Install Prettier and ESLint
+        run: |
+          npm install --global prettier
+          npm install --global eslint eslint-plugin-yml
+
+      - name: Run ESLint fix
+        run: eslint --fix "**/*.{yml,yaml}" || true
 
       - name: Run Prettier format
         run: prettier --write .
 
-      - name: Commit Prettier changes
+      - name: Commit formatting changes
         uses: stefanzweifel/git-auto-commit-action@v5
         with:
-          commit_message: 'style: apply Prettier formatting'
+          commit_message: 'style: apply Prettier and ESLint formatting'
 
       - name: Set up Helm
         uses: azure/setup-helm@v4
