@@ -88,6 +88,8 @@ jobs:
             ref: prSha,
           });
 
+          console.log(`All checks from API: ${checkRuns.check_runs.map(c => c.name).join(', ')}`);
+
           const relevantChecks = checkRuns.check_runs.filter(check =>
             requiredChecks.includes(check.name)
           );
