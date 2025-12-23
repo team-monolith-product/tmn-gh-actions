@@ -39,6 +39,13 @@ jobs:
         token: ${{ secrets.MACHINE_TOKEN }}
         path: tmn-gh-actions
 
+    - name: Debug - List checkout contents
+      run: |
+        echo "=== job_workflow_sha: ${{ github.job_workflow_sha }} ==="
+        echo "=== Listing tmn-gh-actions/.github/scripts ==="
+        ls -la tmn-gh-actions/.github/scripts/ || echo "scripts directory not found"
+        ls -la tmn-gh-actions/.github/scripts/notify_reviewers/ || echo "notify_reviewers directory not found"
+
     - name: Get PR info (workflow_run only)
       id: pr-info
       if: github.event_name == 'workflow_run'
