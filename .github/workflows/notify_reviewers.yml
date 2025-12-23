@@ -31,29 +31,6 @@ jobs:
       cancel-in-progress: true
 
     steps:
-    - name: Extract workflow ref
-      id: extract-ref
-      run: |
-        # github.workflow_ref format: owner/repo/.github/workflows/file.yml@ref
-        WORKFLOW_REF="${{ github.workflow_ref }}"
-        REF="${WORKFLOW_REF##*@}"
-        echo "ref=$REF" >> $GITHUB_OUTPUT
-        echo "Extracted ref: $REF"
-
-    - name: Checkout tmn-gh-actions
-      uses: actions/checkout@v4
-      with:
-        repository: team-monolith-product/tmn-gh-actions
-        ref: ${{ steps.extract-ref.outputs.ref }}
-        token: ${{ secrets.MACHINE_TOKEN }}
-        path: tmn-gh-actions
-
-    - name: Debug - List checkout contents
-      run: |
-        echo "=== Listing tmn-gh-actions/.github/scripts ==="
-        ls -la tmn-gh-actions/.github/scripts/ || echo "scripts directory not found"
-        ls -la tmn-gh-actions/.github/scripts/notify_reviewers/ || echo "notify_reviewers directory not found"
-
     - name: Get PR info (workflow_run only)
       id: pr-info
       if: github.event_name == 'workflow_run'
@@ -94,8 +71,54 @@ jobs:
       with:
         github-token: ${{ secrets.MACHINE_TOKEN }}
         script: |
-          const script = require('./tmn-gh-actions/.github/scripts/notify_reviewers/verify-checks.js')
-          await script({github, context, core})
+          const fs = require('fs');
+          const requiredChecks = JSON.parse(fs.readFileSync('required_checks.json', 'utf8'));
+          const prSha = process.env.PR_SHA;
+
+          if (requiredChecks.length === 0) {
+            console.log('No required checks specified. Skipping check verification.');
+            return;
+          }
+
+          console.log(`Verifying checks: ${requiredChecks.join(', ')}`);
+
+          const { data: checkRuns } = await github.rest.checks.listForRef({
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            ref: prSha,
+          });
+
+          const relevantChecks = checkRuns.check_runs.filter(check =>
+            requiredChecks.includes(check.name)
+          );
+
+          console.log(`Found ${relevantChecks.length}/${requiredChecks.length} required checks`);
+
+          for (const checkName of requiredChecks) {
+            const check = relevantChecks.find(c => c.name === checkName);
+
+            if (!check) {
+              console.log(`Check "${checkName}" not found yet. Skipping notification.`);
+              core.setFailed(`Check "${checkName}" not found`);
+              return;
+            }
+
+            if (check.status !== 'completed') {
+              console.log(`Check "${checkName}" is still running. Skipping notification.`);
+              core.setFailed(`Check "${checkName}" is still running`);
+              return;
+            }
+
+            if (check.conclusion === 'failure' || check.conclusion === 'cancelled') {
+              console.log(`Check "${checkName}" failed (${check.conclusion}). Aborting.`);
+              core.setFailed(`Check "${checkName}" failed`);
+              return;
+            }
+
+            console.log(`Check "${checkName}": ${check.conclusion}`);
+          }
+
+          console.log('All required checks passed!');
 
     - name: Get reviewers
       id: get-reviewers
@@ -105,8 +128,25 @@ jobs:
       with:
         github-token: ${{ secrets.MACHINE_TOKEN }}
         script: |
-          const script = require('./tmn-gh-actions/.github/scripts/notify_reviewers/get-reviewers.js')
-          await script({github, context, core})
+          const prNumber = parseInt(process.env.PR_NUMBER, 10);
+
+          const { data: pr } = await github.rest.pulls.get({
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            pull_number: prNumber,
+          });
+
+          const reviewers = pr.requested_reviewers || [];
+          const teamReviewers = pr.requested_teams || [];
+
+          const reviewerNames = reviewers.map(r => r.login);
+          const teamNames = teamReviewers.map(t => t.name);
+
+          const allReviewers = [...reviewerNames, ...teamNames.map(t => `team:${t}`)];
+
+          console.log('Reviewers:', allReviewers.join(', '));
+          core.setOutput('reviewers', allReviewers.join(', '));
+          core.setOutput('has_reviewers', allReviewers.length > 0 ? 'true' : 'false');
 
     - name: Send Slack notification
       if: ${{ steps.get-reviewers.outputs.has_reviewers == 'true' }}
