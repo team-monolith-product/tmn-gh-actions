@@ -27,16 +27,14 @@ jobs:
         with:
           node-version: '20'
 
-      - name: Install Prettier and ESLint
-        run: |
-          npm install --global prettier
-          npm install --global eslint eslint-plugin-yml
+      - name: Install dependencies
+        run: npm install
 
       - name: Run ESLint fix
-        run: eslint --fix "**/*.{yml,yaml}" || true
+        run: npx eslint --fix "**/*.{yml,yaml}"
 
       - name: Run Prettier format
-        run: prettier --write .
+        run: npx prettier --write .
 
       - name: Set up Helm
         uses: azure/setup-helm@v4
