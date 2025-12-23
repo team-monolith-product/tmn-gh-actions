@@ -35,13 +35,14 @@ jobs:
       uses: actions/checkout@v4
       with:
         repository: team-monolith-product/tmn-gh-actions
-        ref: ${{ github.job_workflow_sha }}
+        ref: ${{ github.workflow_sha }}
         token: ${{ secrets.MACHINE_TOKEN }}
         path: tmn-gh-actions
 
     - name: Debug - List checkout contents
       run: |
-        echo "=== job_workflow_sha: ${{ github.job_workflow_sha }} ==="
+        echo "=== workflow_sha: ${{ github.workflow_sha }} ==="
+        echo "=== workflow_ref: ${{ github.workflow_ref }} ==="
         echo "=== Listing tmn-gh-actions/.github/scripts ==="
         ls -la tmn-gh-actions/.github/scripts/ || echo "scripts directory not found"
         ls -la tmn-gh-actions/.github/scripts/notify_reviewers/ || echo "notify_reviewers directory not found"
