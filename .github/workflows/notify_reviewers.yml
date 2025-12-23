@@ -31,18 +31,25 @@ jobs:
       cancel-in-progress: true
 
     steps:
+    - name: Extract workflow ref
+      id: extract-ref
+      run: |
+        # github.workflow_ref format: owner/repo/.github/workflows/file.yml@ref
+        WORKFLOW_REF="${{ github.workflow_ref }}"
+        REF="${WORKFLOW_REF##*@}"
+        echo "ref=$REF" >> $GITHUB_OUTPUT
+        echo "Extracted ref: $REF"
+
     - name: Checkout tmn-gh-actions
       uses: actions/checkout@v4
       with:
         repository: team-monolith-product/tmn-gh-actions
-        ref: ${{ github.workflow_sha }}
+        ref: ${{ steps.extract-ref.outputs.ref }}
         token: ${{ secrets.MACHINE_TOKEN }}
         path: tmn-gh-actions
 
     - name: Debug - List checkout contents
       run: |
-        echo "=== workflow_sha: ${{ github.workflow_sha }} ==="
-        echo "=== workflow_ref: ${{ github.workflow_ref }} ==="
         echo "=== Listing tmn-gh-actions/.github/scripts ==="
         ls -la tmn-gh-actions/.github/scripts/ || echo "scripts directory not found"
         ls -la tmn-gh-actions/.github/scripts/notify_reviewers/ || echo "notify_reviewers directory not found"
