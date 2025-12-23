@@ -36,6 +36,11 @@ jobs:
       - name: Run Prettier format
         run: npx prettier --write .
 
+      - name: Commit formatting changes
+        uses: stefanzweifel/git-auto-commit-action@v5
+        with:
+          commit_message: 'style: apply Prettier and ESLint formatting'
+
       - name: Set up Helm
         uses: azure/setup-helm@v4
 
@@ -123,8 +128,3 @@ jobs:
           done
 
           echo "All charts templated successfully! ($CHARTS_PROCESSED chart(s) processed)"
-
-      - name: Commit formatting changes
-        uses: stefanzweifel/git-auto-commit-action@v5
-        with:
-          commit_message: 'style: apply Prettier and ESLint formatting'
