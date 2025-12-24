@@ -179,8 +179,11 @@ jobs:
                     "type": "mrkdwn",
                     "text": "*리뷰어:*\n${{ steps.get-reviewers.outputs.reviewers }}"
                   }
-                ],
-                "accessory": {
+                ]
+              },
+              {
+                "type": "action",
+                "elements": {
                   "type": "button",
                   "text": {
                     "type": "plain_text",
