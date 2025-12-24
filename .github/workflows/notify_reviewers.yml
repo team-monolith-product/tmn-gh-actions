@@ -159,13 +159,13 @@ jobs:
         channel-id: 'C086HAVUFR8'
         payload: |
           {
-            "text": "PR Review Request",
+            "text": "리뷰요청이 도착했습니다!",
             "blocks": [
               {
                 "type": "header",
                 "text": {
                   "type": "plain_text",
-                  "text": "리뷰 요청\n<${{ github.event.pull_request.html_url || steps.pr-info.outputs.url }}|${{ github.event.pull_request.title || steps.pr-info.outputs.title }}>"
+                  "text": "📝 ${{ github.event.pull_request.title || steps.pr-info.outputs.title }}"
                 }
               },
               {
@@ -173,13 +173,22 @@ jobs:
                 "fields": [
                   {
                     "type": "mrkdwn",
-                    "text": "*Author:*\n${{ github.event.pull_request.user.login || steps.pr-info.outputs.author }}"
+                    "text": "*작성자:*\n${{ github.event.pull_request.user.login || steps.pr-info.outputs.author }}"
                   },
                   {
                     "type": "mrkdwn",
-                    "text": "*Reviewers:*\n${{ steps.get-reviewers.outputs.reviewers }}"
+                    "text": "*리뷰어:*\n${{ steps.get-reviewers.outputs.reviewers }}"
                   }
-                ]
+                ],
+                "accessory": {
+                  "type": "button",
+                  "text": {
+                    "type": "plain_text",
+                    "text": "PR 바로가기"
+                  },
+                  "url": "${{ github.event.pull_request.html_url }}",
+                  "style": "primary"
+                }
               }
             ]
           }
