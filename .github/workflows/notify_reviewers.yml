@@ -164,7 +164,7 @@ jobs:
               {
                 "type": "header",
                 "text": {
-                  "type": "mrkdwn",
+                  "type": "plain_text",
                   "text": "리뷰 요청\n<${{ github.event.pull_request.html_url || steps.pr-info.outputs.url }}|${{ github.event.pull_request.title || steps.pr-info.outputs.title }}>"
                 }
               },
