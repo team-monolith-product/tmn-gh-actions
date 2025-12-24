@@ -182,16 +182,18 @@ jobs:
                 ]
               },
               {
-                "type": "action",
-                "elements": {
-                  "type": "button",
-                  "text": {
-                    "type": "plain_text",
-                    "text": "PR 바로가기"
-                  },
-                  "url": "${{ github.event.pull_request.html_url }}",
-                  "style": "primary"
-                }
+                "type": "actions",
+                "elements": [
+                  {
+                    "type": "button",
+                    "text": {
+                      "type": "plain_text",
+                      "text": "PR 바로가기"
+                    },
+                    "url": "${{ github.event.pull_request.html_url }}",
+                    "style": "primary"
+                  }
+                ]
               }
             ]
           }
