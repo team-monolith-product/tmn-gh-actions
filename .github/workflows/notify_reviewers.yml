@@ -165,7 +165,7 @@ jobs:
                 "type": "header",
                 "text": {
                   "type": "plain_text",
-                  "text": "📝 PR Review Requested"
+                  "text": "리뷰 요청\n<${{ github.event.pull_request.html_url || steps.pr-info.outputs.url }}|${{ github.event.pull_request.title || steps.pr-info.outputs.title }}>"
                 }
               },
               {
@@ -173,28 +173,13 @@ jobs:
                 "fields": [
                   {
                     "type": "mrkdwn",
-                    "text": "*PR Title:*\n${{ github.event.pull_request.title || steps.pr-info.outputs.title }}"
-                  },
-                  {
-                    "type": "mrkdwn",
                     "text": "*Author:*\n${{ github.event.pull_request.user.login || steps.pr-info.outputs.author }}"
                   },
                   {
                     "type": "mrkdwn",
                     "text": "*Reviewers:*\n${{ steps.get-reviewers.outputs.reviewers }}"
-                  },
-                  {
-                    "type": "mrkdwn",
-                    "text": "*Branch:*\n${{ github.event.pull_request.head.ref || steps.pr-info.outputs.branch }}"
                   }
                 ]
-              },
-              {
-                "type": "section",
-                "text": {
-                  "type": "mrkdwn",
-                  "text": "<${{ github.event.pull_request.html_url || steps.pr-info.outputs.url }}|View Pull Request>"
-                }
               }
             ]
           }
