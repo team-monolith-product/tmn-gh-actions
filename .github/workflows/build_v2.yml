@@ -15,6 +15,9 @@
 # v2.6 - 류호선
 #   - update-tag job을 matrix로 처리
 #   - matrix에 main이 없는 경우 main을 추가
+# v2.7
+#   - AWS 인증을 access key에서 OIDC role assume 방식으로 변경
+#   - AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY secrets 제거
 name: Build
 
 on:
@@ -64,10 +67,6 @@ on:
         type: string
 
     secrets:
-      AWS_ACCESS_KEY_ID:
-        required: false
-      AWS_SECRET_ACCESS_KEY:
-        required: false
       NCP_ACCESS_KEY_ID:
         required: false
       NCP_SECRET_KEY:
@@ -81,6 +80,9 @@ jobs:
   # 1. 도커 이미지를 빌드하고 푸시합니다.
   build-image:
     runs-on: ${{ inputs.runner }}
+    permissions:
+      id-token: write
+      contents: read
     outputs:
       tag: ${{ steps.name-tag.outputs.tag }}
 
@@ -135,8 +137,7 @@ jobs:
       if: ${{ steps.check-platform.outputs.contains_aws == 'true' }}
       uses: aws-actions/configure-aws-credentials@v4
       with:
-        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        role-to-assume: arn:aws:iam::631535140228:role/ped-role-github-actions
         aws-region: ap-northeast-2
 
     - name: Login to Amazon ECR
