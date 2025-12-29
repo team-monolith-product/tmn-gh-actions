@@ -124,6 +124,15 @@ jobs:
                 }
               },
               {
+                "type": "context",
+                "elements": [
+                  {
+                    "type": "mrkdwn",
+                    "text": "필수 검사 항목을 통과하지 않은 PR에 리뷰 요청이 발생했습니다."
+                  }
+                ]
+              },
+              {
                 "type": "section",
                 "fields": [
                   {
