@@ -144,13 +144,6 @@ jobs:
                     "text": "*리뷰 요청자*\n${{ steps.slack-user.outputs.slack_mention }}"
                   }
                 ]
-              },
-              {
-                "type": "section",
-                "text": {
-                  "type": "mrkdwn",
-                  "text": "*실패 사유:*\n${{ steps.verify-checks.outputs.failure_reason }}"
-                }
               }
             ]
           }
