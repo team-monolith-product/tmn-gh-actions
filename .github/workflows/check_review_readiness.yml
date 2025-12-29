@@ -28,6 +28,27 @@ jobs:
       cancel-in-progress: true
 
     steps:
+    - name: Get Slack user ID
+      id: slack-user
+      run: |
+        declare -A SLACK_MAP=(
+          ["a3626a"]="U02HT4EU4VD"
+          ["HoseonRyu"]="U02PFUPCJNM"
+          ["BaeYeongbin"]="U02JLCWGETT"
+          ["ksy90101"]="U074S4Y9PUP"
+          ["pekopekopekopayo"]="U0859TEQNRJ"
+          ["shcshcshc"]="U03M4FZ6P45"
+          ["BrianPark314"]="U07RP7U3FPU"
+          ["byeonghwankwak1"]="U07UL8M03LM"
+        )
+        GITHUB_USER="${{ github.actor }}"
+        SLACK_ID="${SLACK_MAP[$GITHUB_USER]:-}"
+        if [ -n "$SLACK_ID" ]; then
+          echo "slack_mention=<@$SLACK_ID>" >> $GITHUB_OUTPUT
+        else
+          echo "slack_mention=$GITHUB_USER" >> $GITHUB_OUTPUT
+        fi
+
     - name: Parse required checks
       id: parse-checks
       run: |
@@ -108,6 +129,10 @@ jobs:
                   {
                     "type": "mrkdwn",
                     "text": "*PR*\n<${{ github.event.pull_request.html_url }}|${{ github.event.pull_request.title }}>"
+                  },
+                  {
+                    "type": "mrkdwn",
+                    "text": "*리뷰 요청자*\n${{ steps.slack-user.outputs.slack_mention }}"
                   }
                 ]
               },
