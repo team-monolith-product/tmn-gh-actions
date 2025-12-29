@@ -62,19 +62,19 @@ jobs:
 
             if (!check) {
               core.setOutput('failed', 'true');
-              core.setOutput('failure_reason', `체크 "${checkName}"을(를) 찾을 수 없습니다`);
+              core.setOutput('failure_reason', `체크 [${checkName}]을(를) 찾을 수 없습니다`);
               return;
             }
 
             if (check.status !== 'completed') {
               core.setOutput('failed', 'true');
-              core.setOutput('failure_reason', `체크 "${checkName}"이(가) 아직 실행 중입니다`);
+              core.setOutput('failure_reason', `체크 [${checkName}]이(가) 아직 실행 중입니다`);
               return;
             }
 
             if (check.conclusion === 'failure' || check.conclusion === 'cancelled') {
               core.setOutput('failed', 'true');
-              core.setOutput('failure_reason', `체크 "${checkName}"이(가) 실패했습니다 (${check.conclusion})`);
+              core.setOutput('failure_reason', `체크 [${checkName}]이(가) 실패했습니다 (${check.conclusion})`);
               return;
             }
 
