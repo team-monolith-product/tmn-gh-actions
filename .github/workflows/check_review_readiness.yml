@@ -1,0 +1,199 @@
+# v1.0 - 류호선
+#   - PR 상태 검증 (draft가 아닌 open 상태인지)
+#   - 필수 체크 통과 여부 검증
+#   - 실패 시 Slack 알림 전송
+name: PR Validation
+
+on:
+  workflow_call:
+    inputs:
+      # 체크해야 할 check 리스트
+      requiredChecks:
+        required: false
+        type: string
+        description: 'JSON array of required check names. Example: ["build", "test", "lint"]'
+        default: '[]'
+
+    secrets:
+      MACHINE_TOKEN:
+        required: true
+      SLACK_BOT_TOKEN:
+        required: true
+
+jobs:
+  check-review-readiness:
+    runs-on: ubuntu-22.04
+
+    concurrency:
+      group: check-review-readiness/${{ github.ref }}
+      cancel-in-progress: true
+
+    steps:
+    - name: Check PR state
+      id: check-state
+      uses: actions/github-script@v7
+      with:
+        script: |
+          const state = '${{ github.event.pull_request.state }}';
+          const draft = '${{ github.event.pull_request.draft }}' === 'true';
+
+          if (state !== 'open') {
+            core.setOutput('failed', 'true');
+            core.setOutput('failure_reason', `PR이 open 상태가 아닙니다 (현재: ${state})`);
+            return;
+          }
+
+          if (draft) {
+            core.setOutput('failed', 'true');
+            core.setOutput('failure_reason', 'PR이 draft 상태입니다');
+            return;
+          }
+
+          core.setOutput('failed', 'false');
+          console.log('PR state check passed: open and not draft');
+
+    - name: Send Slack notification (PR state failed)
+      if: steps.check-state.outputs.failed == 'true'
+      uses: slackapi/slack-github-action@v1
+      env:
+        SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
+      with:
+        channel-id: 'C086HAVUFR8'
+        payload: |
+          {
+            "text": "PR 검증 실패",
+            "blocks": [
+              {
+                "type": "header",
+                "text": {
+                  "type": "plain_text",
+                  "text": "❌ PR 검증 실패"
+                }
+              },
+              {
+                "type": "section",
+                "fields": [
+                  {
+                    "type": "mrkdwn",
+                    "text": "*PR:*\n<${{ github.event.pull_request.html_url }}|#${{ github.event.pull_request.number }} ${{ github.event.pull_request.title }}>"
+                  },
+                  {
+                    "type": "mrkdwn",
+                    "text": "*실패 단계:*\nPR 상태 확인"
+                  }
+                ]
+              },
+              {
+                "type": "section",
+                "text": {
+                  "type": "mrkdwn",
+                  "text": "*실패 사유:*\n${{ steps.check-state.outputs.failure_reason }}"
+                }
+              }
+            ]
+          }
+
+    - name: Exit if PR state check failed
+      if: steps.check-state.outputs.failed == 'true'
+      run: exit 1
+
+    - name: Parse required checks
+      id: parse-checks
+      run: |
+        echo '${{ inputs.requiredChecks }}' > required_checks.json
+        echo "check_count=$(jq '. | length' required_checks.json)" >> $GITHUB_OUTPUT
+
+    - name: Verify required checks
+      id: verify-checks
+      if: fromJSON(steps.parse-checks.outputs.check_count) > 0
+      uses: actions/github-script@v7
+      env:
+        PR_SHA: ${{ github.event.pull_request.head.sha }}
+      with:
+        github-token: ${{ secrets.MACHINE_TOKEN }}
+        script: |
+          const fs = require('fs');
+          const requiredChecks = JSON.parse(fs.readFileSync('required_checks.json', 'utf8'));
+          const prSha = process.env.PR_SHA;
+
+          console.log(`Verifying checks: ${requiredChecks.join(', ')}`);
+
+          const { data: checkRuns } = await github.rest.checks.listForRef({
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            ref: prSha,
+          });
+
+          console.log(`All checks from API: ${checkRuns.check_runs.map(c => c.name).join(', ')}`);
+
+          for (const checkName of requiredChecks) {
+            const check = checkRuns.check_runs.find(c => c.name === checkName);
+
+            if (!check) {
+              core.setOutput('failed', 'true');
+              core.setOutput('failure_reason', `체크 "${checkName}"을(를) 찾을 수 없습니다`);
+              return;
+            }
+
+            if (check.status !== 'completed') {
+              core.setOutput('failed', 'true');
+              core.setOutput('failure_reason', `체크 "${checkName}"이(가) 아직 실행 중입니다`);
+              return;
+            }
+
+            if (check.conclusion === 'failure' || check.conclusion === 'cancelled') {
+              core.setOutput('failed', 'true');
+              core.setOutput('failure_reason', `체크 "${checkName}"이(가) 실패했습니다 (${check.conclusion})`);
+              return;
+            }
+
+            console.log(`Check "${checkName}": ${check.conclusion}`);
+          }
+
+          core.setOutput('failed', 'false');
+          console.log('All required checks passed!');
+
+    - name: Send Slack notification (checks failed)
+      if: steps.verify-checks.outputs.failed == 'true'
+      uses: slackapi/slack-github-action@v1
+      env:
+        SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
+      with:
+        channel-id: 'C086HAVUFR8'
+        payload: |
+          {
+            "text": "PR 검증 실패",
+            "blocks": [
+              {
+                "type": "header",
+                "text": {
+                  "type": "plain_text",
+                  "text": "❌ PR 검증 실패"
+                }
+              },
+              {
+                "type": "section",
+                "fields": [
+                  {
+                    "type": "mrkdwn",
+                    "text": "*PR:*\n<${{ github.event.pull_request.html_url }}|#${{ github.event.pull_request.number }} ${{ github.event.pull_request.title }}>"
+                  },
+                  {
+                    "type": "mrkdwn",
+                    "text": "*실패 단계:*\n필수 체크 확인"
+                  }
+                ]
+              },
+              {
+                "type": "section",
+                "text": {
+                  "type": "mrkdwn",
+                  "text": "*실패 사유:*\n${{ steps.verify-checks.outputs.failure_reason }}"
+                }
+              }
+            ]
+          }
+
+    - name: Exit if checks failed
+      if: steps.verify-checks.outputs.failed == 'true'
+      run: exit 1
