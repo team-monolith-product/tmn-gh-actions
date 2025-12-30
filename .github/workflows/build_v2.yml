@@ -15,7 +15,7 @@
 # v2.6 - 류호선
 #   - update-tag job을 matrix로 처리
 #   - matrix에 main이 없는 경우 main을 추가
-# v2.7
+# v2.7 - 박기영
 #   - AWS 인증을 access key에서 OIDC role assume 방식으로 변경
 #   - AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY secrets 제거
 name: Build
