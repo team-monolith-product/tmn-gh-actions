@@ -18,6 +18,8 @@
 # v2.7 - 박기영
 #   - AWS 인증을 access key에서 OIDC role assume 방식으로 변경
 #   - AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY secrets 제거
+# v2.8 - 박기영
+#   - workflow level outputs에 tag 추가
 name: Build
 
 on:
@@ -65,6 +67,11 @@ on:
       buildContext:
         required: false
         type: string
+
+    outputs:
+      tag:
+        description: The image tag
+        value: ${{ jobs.build-image.outputs.tag }}
 
     secrets:
       NCP_ACCESS_KEY_ID:
