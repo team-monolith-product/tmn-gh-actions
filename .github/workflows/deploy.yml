@@ -12,6 +12,9 @@ on:
       comment_body:
         required: true
         type: string
+    secrets:
+      MACHINE_TOKEN:
+        required: false
 
 jobs:
   merge-pr:
