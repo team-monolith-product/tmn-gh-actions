@@ -37,8 +37,15 @@ jobs:
           git merge pr-branch --no-ff -m "Merge PR #$PR_NUMBER to develop"
           git push origin develop
 
-      - name: Add end emoji reaction to the comment
+      - name: Add success reaction
         uses: peter-evans/create-or-update-comment@v2
         with:
           comment-id: ${{ inputs.comment_id }}
           reaction-type: 'rocket'
+
+      - name: Add failure reaction
+        if: failure()
+        uses: peter-evans/create-or-update-comment@v2
+        with:
+          comment-id: ${{ inputs.comment_id }}
+          reaction-type: '-1'
