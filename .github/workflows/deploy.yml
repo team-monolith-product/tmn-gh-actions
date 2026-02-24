@@ -19,35 +19,26 @@ on:
 jobs:
   merge-pr:
     if: ${{ inputs.comment_body == '/deploy' }}
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     steps:
-      - name: 브랜치 결정
-        id: branch
-        env:
-          GH_TOKEN: ${{ secrets.MACHINE_TOKEN || github.token }}
-        run: |
-          REF=$(gh pr view ${{ inputs.issue_number }} --repo ${{ github.repository }} --json headRefName -q .headRefName)
-          echo "ref=${REF}" >> "$GITHUB_OUTPUT"
-
-      - uses: actions/checkout@v4
+      - name: Check out the repository
+        uses: actions/checkout@v4
         with:
           ref: develop
           fetch-depth: 0
           token: ${{ secrets.MACHINE_TOKEN || github.token }}
 
-      - name: Merge and push
+      - name: Merge PR to develop
         run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          git fetch origin "${{ steps.branch.outputs.ref }}"
-          git merge --no-ff "origin/${{ steps.branch.outputs.ref }}" \
-            -m "Merge ${{ steps.branch.outputs.ref }} into develop"
+          PR_NUMBER=${{ inputs.issue_number }}
+          git config --global user.name 'github-actions[bot]'
+          git config --global user.email 'github-actions[bot]@users.noreply.github.com'
+          git fetch origin pull/$PR_NUMBER/head:pr-branch
+          git merge pr-branch --no-ff -m "Merge PR #$PR_NUMBER to develop"
           git push origin develop
 
-      - name: 리액션
-        if: always()
-        env:
-          GH_TOKEN: ${{ secrets.MACHINE_TOKEN || github.token }}
-        run: |
-          EMOJI=${{ job.status == 'success' && '"+1"' || '"-1"' }}
-          gh api repos/${{ github.repository }}/issues/comments/${{ inputs.comment_id }}/reactions -f content="$EMOJI"
+      - name: Add end emoji reaction to the comment
+        uses: peter-evans/create-or-update-comment@v2
+        with:
+          comment-id: ${{ inputs.comment_id }}
+          reaction-type: 'rocket'
