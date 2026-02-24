@@ -19,16 +19,8 @@ on:
 jobs:
   merge-pr:
     if: ${{ inputs.comment_body == '/deploy' }}
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     steps:
-      - name: 브랜치 결정
-        id: branch
-        env:
-          GH_TOKEN: ${{ secrets.MACHINE_TOKEN || github.token }}
-        run: |
-          REF=$(gh pr view ${{ inputs.issue_number }} --repo ${{ github.repository }} --json headRefName -q .headRefName)
-          echo "ref=${REF}" >> "$GITHUB_OUTPUT"
-
       - uses: actions/checkout@v4
         with:
           ref: develop
@@ -39,9 +31,8 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git fetch origin "${{ steps.branch.outputs.ref }}"
-          git merge --no-ff "origin/${{ steps.branch.outputs.ref }}" \
-            -m "Merge ${{ steps.branch.outputs.ref }} into develop"
+          git fetch origin pull/${{ inputs.issue_number }}/head:pr-branch
+          git merge --no-ff pr-branch -m "Merge PR #${{ inputs.issue_number }} to develop"
           git push origin develop
 
       - name: 리액션
