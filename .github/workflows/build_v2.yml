@@ -20,6 +20,9 @@
 #   - AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY secrets 제거
 # v2.8 - 박기영
 #   - workflow level outputs에 tag 추가
+# v2.9 - 류호선
+#   - freeDiskSpace 옵션 추가 (기본값: false)
+#   - true 시 빌드 전 사전 설치 도구 제거로 ~14GB 디스크 확보
 name: Build
 
 on:
@@ -111,7 +114,7 @@ jobs:
     - name: Free disk space
       if: ${{ inputs.freeDiskSpace }}
       run: |
-        sudo rm -rf /usr/share/dotnet /opt/ghc /usr/local/share/boost "$AGENT_TOOLSDIRECTORY"
+        sudo rm -rf /usr/share/dotnet /opt/ghc /usr/local/share/boost "$RUNNER_TOOL_CACHE"
 
     - name: Checkout
       uses: actions/checkout@v4
