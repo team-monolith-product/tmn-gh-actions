@@ -23,6 +23,10 @@
 # v2.9 - 류호선
 #   - freeDiskSpace 옵션 추가 (기본값: false)
 #   - true 시 빌드 전 사전 설치 도구 제거로 ~14GB 디스크 확보
+# v2.10 - 박기영
+#   - buildContext 가 "." 또는 "./" 이면 tag prefix 를 붙이지 않도록 수정.
+#     기존에는 prefix 가 ".-" 가 되어 ECR tag 가 invalid reference format 으로
+#     빌드가 실패했다. 명시적 sub-directory context 만 prefix 로 활용한다.
 name: Build
 
 on:
@@ -133,8 +137,11 @@ jobs:
       env:
         CONTEXT: ${{ inputs.buildContext }}
       run: |
+        # buildContext 가 "." 또는 "./" 처럼 repo root 를 가리키면 prefix 를 붙이지 않는다.
+        # 그렇지 않으면 ECR tag 가 ".-2026-05-26T..." 같은 invalid reference format 이 된다.
+        # 명시적 sub-directory (예: "apps/foo") 만 tag prefix 로 활용.
         PREFIX=''
-        if [ -n "$CONTEXT" ]; then
+        if [ -n "$CONTEXT" ] && [ "$CONTEXT" != "." ] && [ "$CONTEXT" != "./" ]; then
           PREFIX="$CONTEXT-"
         fi
         echo "tag=${PREFIX}$(TZ='Asia/Seoul' date +'%Y-%m-%dT%H-%M-%S')" >> $GITHUB_OUTPUT
