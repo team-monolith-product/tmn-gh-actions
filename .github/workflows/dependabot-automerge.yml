@@ -1,0 +1,57 @@
+name: Dependabot Auto-Merge
+
+# Dependabot PR 중 안전한 버전 업데이트를 자동 승인 + auto-merge 활성화합니다.
+# 실제 병합은 GitHub auto-merge가 base 브랜치 ruleset의 required status checks
+# 통과를 기다렸다가 수행하므로, CI 게이트는 각 레포의 ruleset이 담당합니다.
+#
+# 자동 병합 허용 조건 (PR에 포함된 모든 의존성이 만족해야 함):
+# - semver-patch 업데이트
+# - semver-minor 업데이트 중 이전 버전이 0.x가 아닌 것
+#   (0.x의 minor 변경은 semver 관례상 breaking으로 간주하여 차단,
+#    이전 버전을 파싱할 수 없는 minor 업데이트도 보수적으로 차단)
+
+on:
+  workflow_call:
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  automerge:
+    if: github.event.pull_request.user.login == 'dependabot[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Fetch Dependabot metadata
+        id: metadata
+        uses: dependabot/fetch-metadata@v2
+        with:
+          github-token: '${{ secrets.GITHUB_TOKEN }}'
+
+      - name: Evaluate update policy
+        id: policy
+        env:
+          UPDATED_DEPENDENCIES: '${{ steps.metadata.outputs.updated-dependencies-json }}'
+        run: |
+          eligible=$(echo "$UPDATED_DEPENDENCIES" | jq '
+            (length > 0) and all(.[];
+              .updateType == "version-update:semver-patch"
+              or (
+                .updateType == "version-update:semver-minor"
+                and ((.prevVersion // "") != "")
+                and ((.prevVersion | ltrimstr("v") | startswith("0.")) | not)
+              )
+            )
+          ')
+          echo "eligible=$eligible" >> "$GITHUB_OUTPUT"
+          echo "updated-dependencies: $UPDATED_DEPENDENCIES"
+          echo "eligible: $eligible"
+
+      - name: Approve and enable auto-merge
+        if: steps.policy.outputs.eligible == 'true'
+        env:
+          GH_TOKEN: '${{ secrets.GITHUB_TOKEN }}'
+          PR_URL: '${{ github.event.pull_request.html_url }}'
+        run: |
+          gh pr review --approve "$PR_URL"
+          gh pr merge --auto --squash "$PR_URL" || gh pr merge --auto --merge "$PR_URL"
