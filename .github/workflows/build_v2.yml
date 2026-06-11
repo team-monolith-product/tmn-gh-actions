@@ -23,6 +23,9 @@
 # v2.9 - 류호선
 #   - freeDiskSpace 옵션 추가 (기본값: false)
 #   - true 시 빌드 전 사전 설치 도구 제거로 ~14GB 디스크 확보
+# v2.10 - 이창환
+#   - build-push 에 provenance: false 추가
+#   - attestation 으로 인한 OCI image index 생성을 막아 ECR BASIC 스캔 정상화
 name: Build
 
 on:
@@ -211,6 +214,8 @@ jobs:
       uses: docker/build-push-action@v5
       with:
         push: true
+        # ECR BASIC 스캔은 OCI image index 를 못 읽으므로 단일 매니페스트로 강제 (단일 amd64 빌드라 attestation 손실 없음)
+        provenance: false
         tags: ${{ steps.tags.outputs.tags }}
         secrets: |
           ${{ secrets.DOCKER_SECRETS }}
