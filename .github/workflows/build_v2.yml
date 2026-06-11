@@ -211,6 +211,7 @@ jobs:
       uses: docker/build-push-action@v5
       with:
         push: true
+        provenance: false
         tags: ${{ steps.tags.outputs.tags }}
         secrets: |
           ${{ secrets.DOCKER_SECRETS }}
