@@ -20,6 +20,10 @@
 #   - AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY secrets 제거
 # v2.8 - 박기영
 #   - workflow level outputs에 tag 추가
+# v2.10 - 이창환
+#   - build-push 에 provenance: false 추가
+#   - attestation 으로 인한 OCI image index 생성을 막아 ECR BASIC 스캔 정상화
+#   - main(#24)에서 develop 으로 우선 반영. v2.9(freeDiskSpace)는 미반영 상태
 name: Build
 
 on:
@@ -198,6 +202,8 @@ jobs:
       uses: docker/build-push-action@v5
       with:
         push: true
+        # ECR BASIC 스캔은 OCI image index 를 못 읽으므로 단일 매니페스트로 강제 (단일 amd64 빌드라 attestation 손실 없음)
+        provenance: false
         tags: ${{ steps.tags.outputs.tags }}
         secrets: |
           ${{ secrets.DOCKER_SECRETS }}
