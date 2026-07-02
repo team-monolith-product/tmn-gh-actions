@@ -21,6 +21,11 @@ jobs:
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
+          # pull_request의 detached merge HEAD가 아니라 실제 PR 브랜치를 체크아웃한다.
+          # 이게 없으면 아래 git-auto-commit(기본 branch=github.head_ref)이 커밋 전
+          # `git checkout <head_ref>`로 브랜치를 바꾸다가, 포맷팅으로 더러워진 워킹트리와
+          # merge HEAD/브랜치 tip의 파일 내용 차이로 "local changes would be overwritten" 에러가 난다.
+          ref: ${{ github.head_ref }}
 
       - name: Set up Node.js
         uses: actions/setup-node@v6
