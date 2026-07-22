@@ -22,7 +22,7 @@ jobs:
     runs-on: ubuntu-22.04
     steps:
       - name: Check out the repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           ref: develop
           fetch-depth: 0
@@ -38,14 +38,14 @@ jobs:
           git push origin develop
 
       - name: Add success reaction
-        uses: peter-evans/create-or-update-comment@v2
+        uses: peter-evans/create-or-update-comment@v5
         with:
           comment-id: ${{ inputs.comment_id }}
-          reaction-type: 'rocket'
+          reactions: 'rocket'
 
       - name: Add failure reaction
         if: failure()
-        uses: peter-evans/create-or-update-comment@v2
+        uses: peter-evans/create-or-update-comment@v5
         with:
           comment-id: ${{ inputs.comment_id }}
-          reaction-type: '-1'
+          reactions: '-1'
