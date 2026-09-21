@@ -43,6 +43,11 @@ on:
       target:
         required: true
         type: string
+      includeMain:
+        required: false
+        type: boolean
+        default: true
+        description: Also update the main Helm branch alongside target.
       propertyPath:
         required: false
         type: string
@@ -245,9 +250,7 @@ jobs:
       matrix:
         target:
           - ${{ inputs.target }}
-        include:
-          # main을 항상 포함시킵니다
-          - target: main
+        include: ${{ inputs.includeMain && fromJSON('[{"target":"main"}]') || fromJSON('[]') }}
 
     # 동시성 제어 설정
     # concurrency

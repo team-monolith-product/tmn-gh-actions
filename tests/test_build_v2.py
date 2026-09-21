@@ -1,6 +1,7 @@
 import json
 import os
 from pathlib import Path
+import re
 import shutil
 import subprocess
 import tempfile
@@ -142,6 +143,23 @@ sites:
         push = next(step for step in build["steps"] if step.get("id") == "build-push")
         self.assertTrue(push["uses"].startswith("docker/build-push-action@"))
         self.assertTrue(push["with"]["push"])
+
+    def test_main_update_is_optional_and_defaults_to_enabled(self):
+        include_main = self.workflow["on"]["workflow_call"]["inputs"]["includeMain"]
+        self.assertFalse(include_main["required"])
+        self.assertEqual(include_main["type"], "boolean")
+        self.assertTrue(include_main["default"])
+
+    def test_matrix_main_inclusion_contract(self):
+        matrix = self.workflow["jobs"]["update-tag"]["strategy"]["matrix"]
+        self.assertEqual(matrix["target"], ["${{ inputs.target }}"])
+        expression = re.fullmatch(
+            r"\$\{\{ inputs.includeMain && fromJSON\('(.+)'\) \|\| fromJSON\('(.+)'\) \}\}",
+            matrix["include"],
+        )
+        self.assertIsNotNone(expression)
+        self.assertEqual(json.loads(expression[1]), [{"target": "main"}])
+        self.assertEqual(json.loads(expression[2]), [])
 
     def test_tag_and_digest_update_in_one_commit_preserving_yaml_merge(self):
         result, changes = self.make_changes()
