@@ -1,0 +1,28 @@
+name: Build workflow tests
+
+on:
+  pull_request:
+    paths:
+      - .github/workflows/build_v2.yml
+      - .github/workflows/test-build-v2.yml
+      - tests/test_build_v2.py
+  push:
+    branches: [main]
+    paths:
+      - .github/workflows/build_v2.yml
+      - .github/workflows/test-build-v2.yml
+      - tests/test_build_v2.py
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: mikefarah/yq@v4
+        with:
+          cmd: |
+            apk add --no-cache git jq python3 bash
+            python3 -B -m unittest discover -s tests -v
