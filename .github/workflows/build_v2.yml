@@ -43,10 +43,20 @@ on:
       target:
         required: true
         type: string
+      includeMain:
+        required: false
+        type: boolean
+        default: true
+        description: Also update the main Helm branch alongside target.
       propertyPath:
         required: false
         type: string
         default: 'image.tag'
+      digestPropertyPath:
+        required: false
+        type: string
+        default: ''
+        description: Optional Helm value path for the image digest, committed with the tag.
       buildArgs:
         required: false
         type: string
@@ -83,6 +93,9 @@ on:
       tag:
         description: The image tag
         value: ${{ jobs.build-image.outputs.tag }}
+      digest:
+        description: The pushed image digest
+        value: ${{ jobs.build-image.outputs.digest }}
 
     secrets:
       NCP_ACCESS_KEY_ID:
@@ -103,6 +116,7 @@ jobs:
       contents: read
     outputs:
       tag: ${{ steps.name-tag.outputs.tag }}
+      digest: ${{ steps.build-push.outputs.digest }}
 
     # 동시성 제어 설정
     # concurrency
@@ -211,6 +225,7 @@ jobs:
         echo "tags=$TAGS" >> $GITHUB_OUTPUT
 
     - name: Build and push
+      id: build-push
       uses: docker/build-push-action@v7
       with:
         push: true
@@ -235,9 +250,7 @@ jobs:
       matrix:
         target:
           - ${{ inputs.target }}
-        include:
-          # main을 항상 포함시킵니다
-          - target: main
+        include: ${{ inputs.includeMain && fromJSON('[{"target":"main"}]') || fromJSON('[]') }}
 
     # 동시성 제어 설정
     # concurrency
@@ -261,48 +274,88 @@ jobs:
 
     - name: Set changes
       id: changes
+      env:
+        PROPERTY_PATH: ${{ inputs.propertyPath }}
+        DIGEST_PROPERTY_PATH: ${{ inputs.digestPropertyPath }}
+        IMAGE_TAG: ${{ needs.build-image.outputs.tag }}
+        IMAGE_DIGEST: ${{ needs.build-image.outputs.digest }}
       run: |
-        CHANGES="{}"
-        for type in $(jq -r 'keys[]' updateTargets.json); do
-          TARGET=$(jq -r ".$type" updateTargets.json)
-          for VALUE_FILE_PATH in $(echo "$TARGET" | jq -r '.valueFilePath[]'); do
-            if [ "$VALUE_FILE_PATH" != "null" ]; then
-              CHANGES=$(echo $CHANGES | jq -c ".\"$VALUE_FILE_PATH\".\"${{ inputs.propertyPath }}\" = \"${{ needs.build-image.outputs.tag }}\"")
-            fi
-          done
-        done
-        echo "changes=$CHANGES" >> $GITHUB_OUTPUT
+        if [ -n "$DIGEST_PROPERTY_PATH" ]; then
+          if [ "$DIGEST_PROPERTY_PATH" = "$PROPERTY_PATH" ]; then
+            echo "Tag and digest paths must differ" >&2
+            exit 1
+          fi
+          if ! printf '%s' "$IMAGE_DIGEST" | grep -Eq '^sha256:[0-9a-f]{64}$'; then
+            echo "A valid pushed image digest is required" >&2
+            exit 1
+          fi
+        fi
+        CHANGES=$(jq -c \
+          --arg tagPath "$PROPERTY_PATH" --arg tag "$IMAGE_TAG" \
+          --arg digestPath "$DIGEST_PROPERTY_PATH" --arg digest "$IMAGE_DIGEST" '
+          reduce (.[] | .valueFilePath[] | select(. != null and . != "null")) as $file
+            ({}; .[$file][$tagPath] = $tag |
+              if $digestPath != "" then .[$file][$digestPath] = $digest else . end)
+        ' updateTargets.json)
+        echo "changes=$CHANGES" >> "$GITHUB_OUTPUT"
 
     # 주피터와 공통으로 사용할 수 있도록 yq를 사용하여 Helm 차트의 값을 수정합니다.
     # yaml-update-action 을 사용하는 경우에, 적용된 merge 문법들이 모두 랜더링 되는 현상이 발생합니다.
     # https://github.com/team-monolith-product/jce-jupyter-hub-helm/commit/1520f9b003cdd9e79c872fbe7a636a92756b6eac
-    - name: Modify Helm Chart
+    - name: Update Helm values and push
       uses: mikefarah/yq@v4
       env:
         CHANGES: ${{ steps.changes.outputs.changes }}
+        HELM_REPOSITORY: ${{ inputs.helmRepository }}
+        TARGET: ${{ matrix.target }}
+        IMAGE_TAG: ${{ needs.build-image.outputs.tag }}
       with:
         cmd: | # sh shell
-          apk add --no-cache jq
+          set -eu
+          apk add --no-cache git jq
+          cd "$HELM_REPOSITORY"
+          git config --global --add safe.directory "$PWD"
+          git config user.name "github-machine-monolith"
+          git config user.email "github.machine.monolith@gmail.com"
 
-          for change in $(echo "$CHANGES" | jq -c 'to_entries[]'); do
-            FILE=$(echo "$change" | jq -r '.key')
+          candidate=''
+          cleanup() {
+            if [ -n "$candidate" ]; then
+              git -C "$candidate" restore --staged --worktree -- .
+              git worktree remove "$candidate"
+              candidate=''
+            fi
+          }
+          trap cleanup EXIT
 
-            for kv in $(echo "$change" | jq -c '.value | to_entries[]'); do
-              VALUE_PATH=$(echo "$kv" | jq -r '.key')
-              VALUE=$(echo "$kv" | jq -r '.value')
+          for attempt in 1 2 3; do
+            git fetch --no-tags origin "$TARGET"
+            candidate=$(mktemp -d)
+            git worktree add --detach "$candidate" FETCH_HEAD
+            git config --global --add safe.directory "$candidate"
 
-              P=".$VALUE_PATH" V="$VALUE" \
-              yq eval -i 'eval(strenv(P)) = strenv(V)' "${{ inputs.helmRepository }}/$FILE"
+            printf '%s' "$CHANGES" | jq -c 'to_entries[]' | while IFS= read -r change; do
+              file=$(printf '%s' "$change" | jq -r '.key')
+              printf '%s' "$change" | jq -c '.value | to_entries[]' | while IFS= read -r kv; do
+                value_path=$(printf '%s' "$kv" | jq -r '.key')
+                value=$(printf '%s' "$kv" | jq -r '.value')
+                P=".$value_path" V="$value" \
+                  yq eval -i 'eval(strenv(P)) = strenv(V)' "$candidate/$file"
+              done
+              git -C "$candidate" add -- "$file"
             done
-          done
 
-    - name: Commit and Push
-      env:
-        TARGET: ${{ matrix.target }}
-      run: |
-        cd ${{ inputs.helmRepository }}
-        git config --global user.name "github-machine-monolith"
-        git config --global user.email "github.machine.monolith@gmail.com"
-        git add .
-        git commit -m 'auto: Update Image Version to ${{ needs.build-image.outputs.tag }}'
-        git push origin $TARGET
+            if git -C "$candidate" diff --cached --quiet; then
+              echo "Helm values already match the image"
+              exit 0
+            fi
+            git -C "$candidate" commit -m "auto: Update Image Version to $IMAGE_TAG"
+            commit=$(git -C "$candidate" rev-parse HEAD)
+            if git push origin "$commit:refs/heads/$TARGET"; then
+              exit 0
+            fi
+            echo "Helm push failed on attempt $attempt; retrying from origin" >&2
+            cleanup
+          done
+          echo "Helm values could not be pushed after 3 attempts" >&2
+          exit 1
