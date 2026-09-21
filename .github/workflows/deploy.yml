@@ -12,6 +12,9 @@ on:
       comment_body:
         required: true
         type: string
+    secrets:
+      MACHINE_TOKEN:
+        required: false
 
 jobs:
   merge-pr:
@@ -19,24 +22,30 @@ jobs:
     runs-on: ubuntu-22.04
     steps:
       - name: Check out the repository
-        uses: actions/checkout@v4
-
-      - name: Fetch all history for all tags and branches
-        run: git fetch --prune --unshallow
+        uses: actions/checkout@v7
+        with:
+          ref: develop
+          fetch-depth: 0
+          token: ${{ secrets.MACHINE_TOKEN || github.token }}
 
       - name: Merge PR to develop
         run: |
           PR_NUMBER=${{ inputs.issue_number }}
           git config --global user.name 'github-actions[bot]'
           git config --global user.email 'github-actions[bot]@users.noreply.github.com'
-          git remote set-url origin https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}
           git fetch origin pull/$PR_NUMBER/head:pr-branch
-          git checkout develop
           git merge pr-branch --no-ff -m "Merge PR #$PR_NUMBER to develop"
           git push origin develop
 
-      - name: Add end emoji reaction to the comment
-        uses: peter-evans/create-or-update-comment@v2
+      - name: Add success reaction
+        uses: peter-evans/create-or-update-comment@v5
         with:
           comment-id: ${{ inputs.comment_id }}
-          reaction-type: 'rocket'
+          reactions: 'rocket'
+
+      - name: Add failure reaction
+        if: failure()
+        uses: peter-evans/create-or-update-comment@v5
+        with:
+          comment-id: ${{ inputs.comment_id }}
+          reactions: '-1'
