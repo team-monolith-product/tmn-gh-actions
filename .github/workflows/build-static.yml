@@ -1,0 +1,167 @@
+name: Build static assets
+
+on:
+  workflow_call:
+    inputs:
+      env:
+        required: true
+        type: string
+      target:
+        required: true
+        type: string
+        description: Helm branch to update.
+      imageName:
+        required: true
+        type: string
+        description: ECR repository name.
+      valueFilePath:
+        required: true
+        type: string
+      site:
+        required: true
+        type: string
+        description: Site key under sites in the static-nginx values.
+      runner:
+        required: false
+        type: string
+        default: ubuntu-22.04
+      dockerTarget:
+        required: false
+        type: string
+        default: assets
+      buildContext:
+        required: false
+        type: string
+        default: '.'
+      buildArgs:
+        required: false
+        type: string
+      freeDiskSpace:
+        required: false
+        type: boolean
+        default: false
+    outputs:
+      tag:
+        description: The published image tag.
+        value: ${{ jobs.build.outputs.tag }}
+      digest:
+        description: The published image digest.
+        value: ${{ jobs.build.outputs.digest }}
+    secrets:
+      MACHINE_TOKEN:
+        required: true
+      DOCKER_SECRETS:
+        required: false
+
+jobs:
+  build:
+    runs-on: ${{ inputs.runner }}
+    permissions:
+      id-token: write
+      contents: read
+    concurrency:
+      group: build-static/${{ inputs.env }}/${{ inputs.site }}
+      cancel-in-progress: false
+    outputs:
+      tag: ${{ steps.image.outputs.tag }}
+      digest: ${{ steps.build-push.outputs.digest }}
+    steps:
+      - name: Free disk space
+        if: ${{ inputs.freeDiskSpace }}
+        run: sudo rm -rf /usr/share/dotnet /opt/ghc /usr/local/share/boost "$RUNNER_TOOL_CACHE"
+
+      - uses: actions/checkout@v7
+        with:
+          submodules: recursive
+
+      - uses: docker/setup-buildx-action@v4
+
+      - uses: aws-actions/configure-aws-credentials@v6
+        with:
+          role-to-assume: arn:aws:iam::631535140228:role/ped-role-github-actions
+          aws-region: ap-northeast-2
+
+      - uses: aws-actions/amazon-ecr-login@v2
+        id: login-ecr
+
+      - name: Name image
+        id: image
+        run: echo "tag=$(TZ='Asia/Seoul' date +'%Y-%m-%dT%H-%M-%S')" >> "$GITHUB_OUTPUT"
+
+      - name: Build and push
+        id: build-push
+        uses: docker/build-push-action@v7
+        with:
+          context: ${{ inputs.buildContext }}
+          target: ${{ inputs.dockerTarget }}
+          platforms: linux/amd64
+          push: true
+          provenance: false
+          tags: ${{ steps.login-ecr.outputs.registry }}/${{ inputs.imageName }}:${{ steps.image.outputs.tag }}
+          build-args: ${{ inputs.buildArgs }}
+          secrets: ${{ secrets.DOCKER_SECRETS }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Checkout Helm values
+        uses: actions/checkout@v7
+        with:
+          repository: team-monolith-product/jce-service-helm
+          path: helm
+          token: ${{ secrets.MACHINE_TOKEN }}
+          ref: ${{ inputs.target }}
+
+      - name: Update site image and push
+        uses: mikefarah/yq@v4
+        env:
+          TARGET: ${{ inputs.target }}
+          VALUE_FILE: ${{ inputs.valueFilePath }}
+          SITE: ${{ inputs.site }}
+          IMAGE_TAG: ${{ steps.image.outputs.tag }}
+          IMAGE_DIGEST: ${{ steps.build-push.outputs.digest }}
+        with:
+          cmd: |
+            set -eu
+            printf '%s' "$IMAGE_DIGEST" | grep -Eq '^sha256:[0-9a-f]{64}$'
+            apk add --no-cache git
+            cd helm
+            git config --global --add safe.directory "$PWD"
+            git config user.name "github-machine-monolith"
+            git config user.email "github.machine.monolith@gmail.com"
+
+            candidate=''
+            cleanup() {
+              if [ -n "$candidate" ]; then
+                git -C "$candidate" restore --staged --worktree -- .
+                git worktree remove "$candidate"
+                candidate=''
+              fi
+            }
+            trap cleanup EXIT
+
+            for attempt in 1 2 3; do
+              git fetch --no-tags origin "$TARGET"
+              candidate=$(mktemp -d)
+              git worktree add --detach "$candidate" FETCH_HEAD
+              git config --global --add safe.directory "$candidate"
+
+              test -f "$candidate/$VALUE_FILE"
+              yq -e '.sites | has(strenv(SITE))' "$candidate/$VALUE_FILE" > /dev/null
+              yq -i '.sites[strenv(SITE)].image.tag = strenv(IMAGE_TAG) |
+                .sites[strenv(SITE)].image.digest = strenv(IMAGE_DIGEST)' "$candidate/$VALUE_FILE"
+              git -C "$candidate" add -- "$VALUE_FILE"
+
+              if git -C "$candidate" diff --cached --quiet; then
+                echo "Site image already matches"
+                exit 0
+              fi
+              git -C "$candidate" commit -m "auto: Update $SITE image to $IMAGE_TAG"
+              commit=$(git -C "$candidate" rev-parse HEAD)
+              if git push origin "$commit:refs/heads/$TARGET"; then
+                exit 0
+              fi
+              echo "Helm push failed on attempt $attempt; retrying from origin" >&2
+              cleanup
+            done
+            echo "Site image could not be updated after 3 attempts" >&2
+            exit 1
