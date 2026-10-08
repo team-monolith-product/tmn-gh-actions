@@ -90,7 +90,7 @@ on:
       NCP_SECRET_KEY:
         required: false
       MACHINE_TOKEN:
-        required: true
+        required: false
       DOCKER_SECRETS:
         required: false
 
@@ -229,6 +229,9 @@ jobs:
   update-tag:
     runs-on: ${{ inputs.runner }}
     needs: build-image
+    permissions:
+      id-token: write
+      contents: read
 
     strategy:
       fail-fast: false
@@ -251,12 +254,40 @@ jobs:
       id: set-json
       run: echo '${{ inputs.updateTargets }}' > updateTargets.json
 
+    - name: Configure AWS credentials
+      uses: aws-actions/configure-aws-credentials@v6
+      with:
+        role-to-assume: arn:aws:iam::631535140228:role/ped-role-github-actions
+        aws-region: ap-northeast-2
+
+    - name: Read GitHub App credentials
+      id: app-credentials
+      uses: actions/github-script@v8
+      with:
+        script: |
+          const { execFileSync } = require('node:child_process');
+          const parameter = JSON.parse(execFileSync('aws', ['ssm', 'get-parameter', '--name', '/tmn/github-app', '--with-decryption'], { encoding: 'utf8' }));
+          const credentials = JSON.parse(parameter.Parameter.Value);
+          core.setSecret(credentials.private_key);
+          core.setOutput('client-id', credentials.client_id);
+          core.setOutput('private-key', credentials.private_key);
+
+    - name: Create GitHub App token
+      id: app-token
+      uses: actions/create-github-app-token@v3
+      with:
+        client-id: ${{ steps.app-credentials.outputs.client-id }}
+        private-key: ${{ steps.app-credentials.outputs.private-key }}
+        owner: team-monolith-product
+        repositories: ${{ inputs.helmRepository }}
+        permission-contents: write
+
     - name: Checkout to Helm Repository
       uses: actions/checkout@v7
       with:
         repository: team-monolith-product/${{ inputs.helmRepository }}
         path: ${{ inputs.helmRepository }}
-        token: ${{ secrets.MACHINE_TOKEN }}
+        token: ${{ steps.app-token.outputs.token }}
         ref: ${{ matrix.target }}
 
     - name: Set changes
@@ -299,10 +330,13 @@ jobs:
     - name: Commit and Push
       env:
         TARGET: ${{ matrix.target }}
+        APP_SLUG: ${{ steps.app-token.outputs.app-slug }}
+        GH_TOKEN: ${{ steps.app-token.outputs.token }}
       run: |
         cd ${{ inputs.helmRepository }}
-        git config --global user.name "github-machine-monolith"
-        git config --global user.email "github.machine.monolith@gmail.com"
+        BOT_ID=$(gh api "/users/${APP_SLUG}[bot]" --jq .id)
+        git config user.name "${APP_SLUG}[bot]"
+        git config user.email "${BOT_ID}+${APP_SLUG}[bot]@users.noreply.github.com"
         git add .
         git commit -m 'auto: Update Image Version to ${{ needs.build-image.outputs.tag }}'
         git push origin $TARGET
