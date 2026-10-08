@@ -48,7 +48,7 @@ on:
         description: The published image digest.
         value: ${{ jobs.build.outputs.digest }}
     secrets:
-      MACHINE_TOKEN:
+      AUTOMATION_APP_PRIVATE_KEY:
         required: true
       DOCKER_SECRETS:
         required: false
@@ -103,12 +103,22 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
+      - name: Create GitHub App token
+        id: app-token
+        uses: actions/create-github-app-token@v3
+        with:
+          client-id: Iv23li2cfUIFIR5gL3Bp
+          private-key: ${{ secrets.AUTOMATION_APP_PRIVATE_KEY }}
+          owner: team-monolith-product
+          repositories: jce-service-helm
+          permission-contents: write
+
       - name: Checkout Helm values
         uses: actions/checkout@v7
         with:
           repository: team-monolith-product/jce-service-helm
           path: helm
-          token: ${{ secrets.MACHINE_TOKEN }}
+          token: ${{ steps.app-token.outputs.token }}
           ref: ${{ inputs.target }}
 
       - name: Update site image and push
@@ -126,8 +136,8 @@ jobs:
             apk add --no-cache git
             cd helm
             git config --global --add safe.directory "$PWD"
-            git config user.name "github-machine-monolith"
-            git config user.email "github.machine.monolith@gmail.com"
+            git config user.name "team-monolith-deploy[bot]"
+            git config user.email "339398256+team-monolith-deploy[bot]@users.noreply.github.com"
 
             candidate=''
             cleanup() {
