@@ -90,9 +90,7 @@ on:
       NCP_SECRET_KEY:
         required: false
       AUTOMATION_APP_PRIVATE_KEY:
-        required: false
-      MACHINE_TOKEN:
-        required: false
+        required: true
       DOCKER_SECRETS:
         required: false
 
@@ -230,8 +228,6 @@ jobs:
   # 2. Helm 차트의 이미지를 업데이트하고 커밋합니다.
   update-tag:
     runs-on: ${{ inputs.runner }}
-    env:
-      USE_APP_AUTH: ${{ secrets.AUTOMATION_APP_PRIVATE_KEY != '' }}
     needs: build-image
     permissions:
       contents: read
@@ -259,7 +255,6 @@ jobs:
 
     - name: Create GitHub App token
       id: app-token
-      if: env.USE_APP_AUTH == 'true'
       uses: actions/create-github-app-token@v3
       with:
         client-id: Iv23li2cfUIFIR5gL3Bp
@@ -273,7 +268,7 @@ jobs:
       with:
         repository: team-monolith-product/${{ inputs.helmRepository }}
         path: ${{ inputs.helmRepository }}
-        token: ${{ steps.app-token.outputs.token || secrets.MACHINE_TOKEN }}
+        token: ${{ steps.app-token.outputs.token }}
         ref: ${{ matrix.target }}
 
     - name: Set changes
@@ -317,17 +312,12 @@ jobs:
       env:
         TARGET: ${{ matrix.target }}
         APP_SLUG: ${{ steps.app-token.outputs.app-slug }}
-        GH_TOKEN: ${{ steps.app-token.outputs.token || secrets.MACHINE_TOKEN }}
+        GH_TOKEN: ${{ steps.app-token.outputs.token }}
       run: |
         cd ${{ inputs.helmRepository }}
-        if [ -n "$APP_SLUG" ]; then
-          BOT_NAME="${APP_SLUG}[bot]"
-        else
-          BOT_NAME=$(gh api /user --jq .login)
-        fi
-        BOT_ID=$(gh api "/users/$BOT_NAME" --jq .id)
-        git config user.name "$BOT_NAME"
-        git config user.email "${BOT_ID}+${BOT_NAME}@users.noreply.github.com"
+        BOT_ID=$(gh api "/users/${APP_SLUG}[bot]" --jq .id)
+        git config user.name "${APP_SLUG}[bot]"
+        git config user.email "${BOT_ID}+${APP_SLUG}[bot]@users.noreply.github.com"
         git add .
         git commit -m 'auto: Update Image Version to ${{ needs.build-image.outputs.tag }}'
         git push origin $TARGET
