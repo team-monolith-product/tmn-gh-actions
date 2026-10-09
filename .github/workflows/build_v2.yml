@@ -89,7 +89,7 @@ on:
         required: false
       NCP_SECRET_KEY:
         required: false
-      MACHINE_TOKEN:
+      AUTOMATION_APP_PRIVATE_KEY:
         required: true
       DOCKER_SECRETS:
         required: false
@@ -251,12 +251,21 @@ jobs:
       id: set-json
       run: echo '${{ inputs.updateTargets }}' > updateTargets.json
 
+    - name: Create GitHub App token
+      id: app-token
+      uses: actions/create-github-app-token@v3
+      with:
+        client-id: Iv23li2cfUIFIR5gL3Bp
+        private-key: ${{ secrets.AUTOMATION_APP_PRIVATE_KEY }}
+        owner: team-monolith-product
+        repositories: ${{ inputs.helmRepository }}
+        permission-contents: write
     - name: Checkout to Helm Repository
       uses: actions/checkout@v7
       with:
         repository: team-monolith-product/${{ inputs.helmRepository }}
         path: ${{ inputs.helmRepository }}
-        token: ${{ secrets.MACHINE_TOKEN }}
+        token: ${{ steps.app-token.outputs.token }}
         ref: ${{ matrix.target }}
 
     - name: Set changes
@@ -301,8 +310,8 @@ jobs:
         TARGET: ${{ matrix.target }}
       run: |
         cd ${{ inputs.helmRepository }}
-        git config --global user.name "github-machine-monolith"
-        git config --global user.email "github.machine.monolith@gmail.com"
+        git config --global user.name "team-monolith-deploy[bot]"
+        git config --global user.email "339398256+team-monolith-deploy[bot]@users.noreply.github.com"
         git add .
         git commit -m 'auto: Update Image Version to ${{ needs.build-image.outputs.tag }}'
         git push origin $TARGET
