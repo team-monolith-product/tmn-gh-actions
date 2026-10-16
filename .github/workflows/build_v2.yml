@@ -70,6 +70,10 @@ on:
         required: false
         type: string
         default: jce-service-helm
+      helmUpdateTargets:
+        required: false
+        type: string
+        description: JSON array of repository, propertyPath and valueFilePath entries. Defaults to the existing Helm inputs.
       buildContext:
         required: false
         type: string
@@ -103,6 +107,7 @@ jobs:
       contents: read
     outputs:
       tag: ${{ steps.name-tag.outputs.tag }}
+      helm_targets: ${{ steps.set-json.outputs.helm_targets }}
 
     # 동시성 제어 설정
     # concurrency
@@ -144,7 +149,20 @@ jobs:
 
     - name: Set up JSON file
       id: set-json
-      run: echo '${{ inputs.updateTargets }}' > updateTargets.json
+      env:
+        UPDATE_TARGETS: ${{ inputs.updateTargets }}
+        HELM_UPDATE_TARGETS: ${{ inputs.helmUpdateTargets }}
+        HELM_REPOSITORY: ${{ inputs.helmRepository }}
+        PROPERTY_PATH: ${{ inputs.propertyPath }}
+      run: |
+        printf '%s\n' "$UPDATE_TARGETS" > updateTargets.json
+        if [ -n "$HELM_UPDATE_TARGETS" ]; then
+          helm_targets=$(jq -c . <<< "$HELM_UPDATE_TARGETS")
+        else
+          helm_targets=$(jq -c --arg repository "$HELM_REPOSITORY" --arg property "$PROPERTY_PATH" \
+            '[{repository: $repository, propertyPath: $property, valueFilePath: [.[] | .valueFilePath[] | select(. != null and . != "null")]}]' updateTargets.json)
+        fi
+        echo "helm_targets=$helm_targets" >> "$GITHUB_OUTPUT"
 
     - name: Check for platform presence
       id: check-platform
@@ -235,24 +253,17 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        target:
-          - ${{ inputs.target }}
-        include:
-          # main을 항상 포함시킵니다
-          - target: main
+        target: ${{ fromJSON(inputs.target == 'main' && '["main"]' || format('[{0},"main"]', toJSON(inputs.target))) }}
+        helm: ${{ fromJSON(needs.build-image.outputs.helm_targets) }}
 
     # 동시성 제어 설정
     # concurrency
     #   - target간 분리
     concurrency:
-      group: update-tag/${{ matrix.target }}
+      group: update-tag/${{ matrix.target }}/${{ matrix.helm.repository }}
       cancel-in-progress: false
 
     steps:
-    - name: Set up JSON file
-      id: set-json
-      run: echo '${{ inputs.updateTargets }}' > updateTargets.json
-
     - name: Create GitHub App token
       id: app-token
       uses: actions/create-github-app-token@v3
@@ -260,30 +271,26 @@ jobs:
         client-id: Iv23li2cfUIFIR5gL3Bp
         private-key: ${{ secrets.AUTOMATION_APP_PRIVATE_KEY }}
         owner: team-monolith-product
-        repositories: ${{ inputs.helmRepository }}
+        repositories: ${{ matrix.helm.repository }}
         permission-contents: write
 
     - name: Checkout to Helm Repository
       uses: actions/checkout@v7
       with:
-        repository: team-monolith-product/${{ inputs.helmRepository }}
-        path: ${{ inputs.helmRepository }}
+        repository: team-monolith-product/${{ matrix.helm.repository }}
+        path: ${{ matrix.helm.repository }}
         token: ${{ steps.app-token.outputs.token }}
         ref: ${{ matrix.target }}
 
     - name: Set changes
       id: changes
+      env:
+        HELM_TARGET: ${{ toJSON(matrix.helm) }}
+        IMAGE_TAG: ${{ needs.build-image.outputs.tag }}
       run: |
-        CHANGES="{}"
-        for type in $(jq -r 'keys[]' updateTargets.json); do
-          TARGET=$(jq -r ".$type" updateTargets.json)
-          for VALUE_FILE_PATH in $(echo "$TARGET" | jq -r '.valueFilePath[]'); do
-            if [ "$VALUE_FILE_PATH" != "null" ]; then
-              CHANGES=$(echo $CHANGES | jq -c ".\"$VALUE_FILE_PATH\".\"${{ inputs.propertyPath }}\" = \"${{ needs.build-image.outputs.tag }}\"")
-            fi
-          done
-        done
-        echo "changes=$CHANGES" >> $GITHUB_OUTPUT
+        changes=$(jq -c --arg tag "$IMAGE_TAG" \
+          '.propertyPath as $path | reduce .valueFilePath[] as $file ({}; .[$file][$path] = $tag)' <<< "$HELM_TARGET")
+        echo "changes=$changes" >> "$GITHUB_OUTPUT"
 
     # 주피터와 공통으로 사용할 수 있도록 yq를 사용하여 Helm 차트의 값을 수정합니다.
     # yaml-update-action 을 사용하는 경우에, 적용된 merge 문법들이 모두 랜더링 되는 현상이 발생합니다.
@@ -292,6 +299,7 @@ jobs:
       uses: mikefarah/yq@v4
       env:
         CHANGES: ${{ steps.changes.outputs.changes }}
+        HELM_REPOSITORY: ${{ matrix.helm.repository }}
       with:
         cmd: | # sh shell
           apk add --no-cache jq
@@ -304,7 +312,7 @@ jobs:
               VALUE=$(echo "$kv" | jq -r '.value')
 
               P=".$VALUE_PATH" V="$VALUE" \
-              yq eval -i 'eval(strenv(P)) = strenv(V)' "${{ inputs.helmRepository }}/$FILE"
+              yq eval -i 'eval(strenv(P)) = strenv(V)' "$HELM_REPOSITORY/$FILE"
             done
           done
 
@@ -313,11 +321,17 @@ jobs:
         TARGET: ${{ matrix.target }}
         APP_SLUG: ${{ steps.app-token.outputs.app-slug }}
         GH_TOKEN: ${{ steps.app-token.outputs.token }}
+        HELM_REPOSITORY: ${{ matrix.helm.repository }}
+        IMAGE_TAG: ${{ needs.build-image.outputs.tag }}
       run: |
-        cd ${{ inputs.helmRepository }}
+        cd "$HELM_REPOSITORY" || exit 1
         BOT_ID=$(gh api "/users/${APP_SLUG}[bot]" --jq .id)
         git config user.name "${APP_SLUG}[bot]"
         git config user.email "${BOT_ID}+${APP_SLUG}[bot]@users.noreply.github.com"
         git add .
-        git commit -m 'auto: Update Image Version to ${{ needs.build-image.outputs.tag }}'
-        git push origin $TARGET
+        if git diff --cached --quiet; then
+          echo "Image tag is already current"
+          exit 0
+        fi
+        git commit -m "auto: Update Image Tag to $IMAGE_TAG"
+        git push origin "$TARGET"
