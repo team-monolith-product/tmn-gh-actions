@@ -131,6 +131,17 @@ jobs:
       id: buildx
       uses: docker/setup-buildx-action@v4
 
+    - name: Set cache scope
+      id: cache-scope
+      env:
+        BUILD_ENV: ${{ inputs.env }}
+        BUILD_TARGET: ${{ inputs.dockerTarget || inputs.env }}
+        BUILD_CONTEXT: ${{ inputs.buildContext || '.' }}
+      run: |
+        CACHE_WEEK=$(TZ='Asia/Seoul' date +'%G-W%V')
+        CACHE_KEY=$(printf '%s\0' "$BUILD_ENV" "$BUILD_TARGET" "$BUILD_CONTEXT" | sha256sum | cut -d ' ' -f 1)
+        echo "scope=buildkit-${CACHE_KEY}-${CACHE_WEEK}" >> "$GITHUB_OUTPUT"
+
     - name: Name tag
       id: name-tag
       env:
@@ -222,8 +233,8 @@ jobs:
         build-args: ${{ inputs.buildArgs }}
         context: ${{ inputs.buildContext }}
         target: ${{ inputs.dockerTarget || inputs.env }}
-        cache-from: type=gha
-        cache-to: type=gha,mode=max
+        cache-from: type=gha,scope=${{ steps.cache-scope.outputs.scope }}
+        cache-to: type=gha,mode=max,scope=${{ steps.cache-scope.outputs.scope }}
 
   # 2. Helm 차트의 이미지를 업데이트하고 커밋합니다.
   update-tag:
