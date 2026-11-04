@@ -73,6 +73,12 @@ on:
       buildContext:
         required: false
         type: string
+      artifactName:
+        required: false
+        type: string
+      artifactPath:
+        required: false
+        type: string
       freeDiskSpace:
         required: false
         type: boolean
@@ -122,9 +128,16 @@ jobs:
     - name: Checkout
       uses: actions/checkout@v7
       with:
-        ref: ${{ github.ref_name }} # 브랜치의 최신 커밋을 체크아웃합니다.
+        ref: ${{ inputs.artifactName != '' && github.sha || github.ref_name }}
         submodules: recursive # 서브모듈 초기화
         fetch-depth: 0
+
+    - name: Download build artifact
+      if: inputs.artifactName != ''
+      uses: actions/download-artifact@v4
+      with:
+        name: ${{ inputs.artifactName }}
+        path: ${{ inputs.artifactPath }}
 
     # buildx는 빠른 도커 백엔드입니다. 빌드 속도 개선을 위해 추가했습니다.
     - name: Set up Docker Buildx
