@@ -53,6 +53,7 @@ on:
       # interface UpdateTarget = {
       #   "registry": string;
       #   "imageName": string;
+      #   "imageKey"?: string; // AWS: required Terraform image key when imageName is omitted
       #   "valueFilePath": string[];
       # }
       # interface UpdateTargets = {
@@ -179,6 +180,38 @@ jobs:
       id: login-ecr
       uses: aws-actions/amazon-ecr-login@v2
 
+    - name: Resolve AWS repository URL
+      if: ${{ steps.check-platform.outputs.contains_aws == 'true' }}
+      id: aws-repository
+      env:
+        BUILD_ENV: ${{ inputs.env }}
+        ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+      run: |
+        image_key=$(jq -r '.aws.imageKey // empty' updateTargets.json)
+        image_name=$(jq -r '.aws.imageName // empty' updateTargets.json)
+        key="${image_key:-$image_name}"
+        if [[ ! "$BUILD_ENV" =~ ^[a-z0-9-]+$ || ! "$key" =~ ^[a-z0-9][a-z0-9._/-]*$ || -z "$ECR_REGISTRY" ]]; then
+          echo "::error::Invalid AWS image key, environment, or registry"
+          exit 1
+        fi
+
+        parameter="/tmn/ecr/$BUILD_ENV/$key/repository-url"
+        if result=$(aws ssm get-parameter --name "$parameter" --query 'Parameter.Value' --output text 2>&1); then
+          repository_url="$result"
+        elif [[ -z "$image_key" && "$result" == *"(ParameterNotFound)"* ]]; then
+          repository_url="$ECR_REGISTRY/$image_name"
+        else
+          echo "::error::Failed to read ECR repository URL from $parameter"
+          printf '%s\n' "$result" >&2
+          exit 1
+        fi
+        repository_name="${repository_url#"$ECR_REGISTRY/"}"
+        if [[ "$repository_url" != "$ECR_REGISTRY/$repository_name" || ! "$repository_name" =~ ^[a-z0-9][a-z0-9._/-]*$ ]]; then
+          echo "::error::ECR repository URL does not match the authenticated registry"
+          exit 1
+        fi
+        echo "url=$repository_url" >> "$GITHUB_OUTPUT"
+
     # NCP 관련 작업
     - name: Login to NCP Container Registry
       if: ${{ steps.check-platform.outputs.contains_ncp == 'true' }}
@@ -191,15 +224,15 @@ jobs:
 
     - name: Set tags
       id: tags
+      env:
+        AWS_REPOSITORY_URL: ${{ steps.aws-repository.outputs.url }}
       run: |
         TAGS=""
         for type in $(jq -r 'keys[]' updateTargets.json); do
           TARGET=$(jq -r ".$type" updateTargets.json)
 
           if [ "$type" == "aws" ]; then
-            AWS_IMAGE_NAME=$(echo "$TARGET" | jq -r '.imageName')
-
-            TAG="${{ steps.login-ecr.outputs.registry }}/${AWS_IMAGE_NAME}:${{ steps.name-tag.outputs.tag }}"
+            TAG="${AWS_REPOSITORY_URL}:${{ steps.name-tag.outputs.tag }}"
 
             if [ -n "$TAGS" ]; then
               TAGS="$TAGS,$TAG"
@@ -219,7 +252,7 @@ jobs:
             fi
           fi
         done
-        echo "tags=$TAGS" >> $GITHUB_OUTPUT
+        echo "tags=$TAGS" >> "$GITHUB_OUTPUT"
 
     - name: Build and push
       uses: docker/build-push-action@v7
